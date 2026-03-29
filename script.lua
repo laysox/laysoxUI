@@ -1,5 +1,4 @@
--- Laysox UI
--- Compatible Madium
+task.wait(3)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,7 +11,17 @@ local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local humanoid = character:WaitForChild("Humanoid")
 local camera = workspace.CurrentCamera
 
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local Rayfield
+local ok, err = pcall(function()
+    Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+end)
+if not ok or not Rayfield then
+    task.wait(3)
+    pcall(function()
+        Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+    end)
+end
+if not Rayfield then return end
 
 -- VARIABLES
 local spinSpeed = 10
@@ -172,7 +181,7 @@ local function stopStick()
     if stickConnection then stickConnection:Disconnect(); stickConnection = nil end
 end
 
--- INVISIBLE (tous les joueurs)
+-- INVISIBLE
 local function setInvis(state)
     invisible = state
     if not character then return end
@@ -285,7 +294,11 @@ local function setupAimlockKey()
             aimlock = not aimlock
             if aimlock then
                 aimlockTarget = getClosest()
-                Rayfield:Notify({ Title="Aimlock ON", Content=aimlockTarget and "Cible : "..aimlockTarget.Name or "Aucune cible", Duration=2 })
+                Rayfield:Notify({
+                    Title = "Aimlock ON",
+                    Content = aimlockTarget and "Cible : "..aimlockTarget.Name or "Aucune cible",
+                    Duration = 2,
+                })
             else
                 aimlockTarget = nil
                 Rayfield:Notify({ Title="Aimlock OFF", Content="Viseur libre.", Duration=2 })
@@ -310,7 +323,7 @@ local Window = Rayfield:CreateWindow({
 local SpinTab = Window:CreateTab("Spin", 4483362458)
 
 SpinTab:CreateSlider({
-    Name = "Vitesse", Range = {1, 100}, Increment = 1,
+    Name = "Vitesse", Range = {1,100}, Increment = 1,
     Suffix = "°/frame", CurrentValue = 10, Flag = "SpinSpeed",
     Callback = function(v) spinSpeed = v end,
 })
@@ -372,11 +385,11 @@ TPTab:CreateSection("TP vers joueur")
 TPTab:CreateDropdown({ Name="Joueur", Options=getPlayers(), CurrentOption={}, Flag="TPPlayer", MultipleOptions=false,
     Callback=function(o) selectedPlayer=o[1] or "" end })
 TPTab:CreateButton({ Name="Téléporter", Callback=function()
-    if selectedPlayer == "" or selectedPlayer == "Aucun joueur" then
+    if selectedPlayer=="" or selectedPlayer=="Aucun joueur" then
         Rayfield:Notify({ Title="Erreur", Content="Aucun joueur.", Duration=2 }); return
     end
-    local ok = tpPlayer(selectedPlayer)
-    Rayfield:Notify({ Title=ok and "TP !" or "Échec", Content=ok and "Vers : "..selectedPlayer or "Introuvable.", Duration=3 })
+    local ok2=tpPlayer(selectedPlayer)
+    Rayfield:Notify({ Title=ok2 and "TP !" or "Échec", Content=ok2 and "Vers : "..selectedPlayer or "Introuvable.", Duration=3 })
 end })
 
 TPTab:CreateSection("Suivre un joueur")
@@ -385,11 +398,11 @@ TPTab:CreateDropdown({ Name="Joueur à suivre", Options=getPlayers(), CurrentOpt
 TPTab:CreateToggle({ Name="Activer le Suivi", CurrentValue=false, Flag="StickToggle",
     Callback=function(v)
         if v then
-            if stickTarget == "" or stickTarget == "Aucun joueur" then
+            if stickTarget=="" or stickTarget=="Aucun joueur" then
                 Rayfield:Notify({ Title="Erreur", Content="Aucun joueur.", Duration=2 }); return
             end
-            local ok = startStick(stickTarget)
-            Rayfield:Notify({ Title=ok and "Suivi ON" or "Échec", Content=ok and "Collé à : "..stickTarget or "Introuvable.", Duration=3 })
+            local ok2=startStick(stickTarget)
+            Rayfield:Notify({ Title=ok2 and "Suivi ON" or "Échec", Content=ok2 and "Collé à : "..stickTarget or "Introuvable.", Duration=3 })
         else
             stopStick()
             Rayfield:Notify({ Title="Suivi OFF", Content="Plus collé.", Duration=2 })
@@ -402,8 +415,8 @@ for _, slot in pairs({"Slot 1","Slot 2","Slot 3"}) do
     TPTab:CreateButton({ Name="💾 Sauvegarder — "..slot, Callback=function()
         savePOS(slot); Rayfield:Notify({ Title="Sauvegardé !", Content=slot, Duration=2 }) end })
     TPTab:CreateButton({ Name="📍 Charger — "..slot, Callback=function()
-        local ok = loadPOS(slot)
-        Rayfield:Notify({ Title=ok and "Chargé !" or "Slot vide", Content=slot, Duration=2 }) end })
+        local ok2=loadPOS(slot)
+        Rayfield:Notify({ Title=ok2 and "Chargé !" or "Slot vide", Content=slot, Duration=2 }) end })
 end
 
 -- TAB DIVERS
@@ -420,7 +433,7 @@ DiversTab:CreateToggle({ Name="Invisible", CurrentValue=false, Flag="InvisToggle
 DiversTab:CreateSection("No-Clip")
 DiversTab:CreateToggle({ Name="No-Clip", CurrentValue=false, Flag="NoclipToggle",
     Callback=function(v)
-        noclip = v
+        noclip=v
         if v then startNoclip(); Rayfield:Notify({ Title="No-Clip ON", Content="Tu traverses les murs.", Duration=3 })
         else stopNoclip(); Rayfield:Notify({ Title="No-Clip OFF", Content="Collisions restaurées.", Duration=2 }) end
     end,
