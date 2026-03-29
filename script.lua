@@ -1,29 +1,19 @@
-local success, err = pcall(function()
+-- Test de chargement
+warn("Laysox UI - Démarrage...")
 
--- TON CODE ICI (tout le script Laysox UI)
-
+local Rayfield
+local ok, err = pcall(function()
+    Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 end)
 
-if not success then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Erreur Laysox",
-        Text = tostring(err),
-        Duration = 15
-    })
+if not ok or not Rayfield then
+    warn("Rayfield failed: " .. tostring(err))
+    -- Retry
+    task.wait(3)
+    Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 end
-```
 
-Comme ça l'erreur s'affichera directement **en jeu** sous forme de notification Roblox.
-
----
-
-**Cause la plus probable** — vérifie dans ton fichier GitHub que :
-
-**1.** Le fichier s'appelle exactement `script.lua` (pas `Script.lua` ou `script.LUA`)
-
-**2.** Va sur cette URL dans ton navigateur et vérifie que tu vois bien le code :
-```
-https://raw.githubusercontent.com/laysox/laysoxUI/main/script.lua--// Laysox UI - Script complet corrigé
+warn("Rayfield chargé !")
 --// LocalScript dans StarterPlayerScripts
 
 local Players = game:GetService("Players")
