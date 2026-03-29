@@ -202,7 +202,7 @@ local UniTab = Window:CreateTab("Universel", 4483362458)
 
 UniTab:CreateSection("Fly")
 UniTab:CreateSlider({
-    Name = "Vitesse Fly", Range = {10,500}, Increment = 10,
+    Name = "Vitesse Fly", Range = {10,2000}, Increment = 10,
     Suffix = " studs/s", CurrentValue = 100, Flag = "UniFlySpeed",
     Callback = function(v) flySpeed = v end,
 })
