@@ -1,4 +1,29 @@
---// Laysox UI - Script complet corrigé
+local success, err = pcall(function()
+
+-- TON CODE ICI (tout le script Laysox UI)
+
+end)
+
+if not success then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Erreur Laysox",
+        Text = tostring(err),
+        Duration = 15
+    })
+end
+```
+
+Comme ça l'erreur s'affichera directement **en jeu** sous forme de notification Roblox.
+
+---
+
+**Cause la plus probable** — vérifie dans ton fichier GitHub que :
+
+**1.** Le fichier s'appelle exactement `script.lua` (pas `Script.lua` ou `script.LUA`)
+
+**2.** Va sur cette URL dans ton navigateur et vérifie que tu vois bien le code :
+```
+https://raw.githubusercontent.com/laysox/laysoxUI/main/script.lua--// Laysox UI - Script complet corrigé
 --// LocalScript dans StarterPlayerScripts
 
 local Players = game:GetService("Players")
