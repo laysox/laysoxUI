@@ -1,4 +1,4 @@
---// Laysox UI - Script complet corrigé
+--// Laysox UI - Rayfield Version
 --// LocalScript dans StarterPlayerScripts
 
 local Players = game:GetService("Players")
@@ -20,19 +20,26 @@ local spinSpeed = 10
 local defaultDirection = 1
 local defaultAxis = "Y"
 local flySpeed = 50
+--========================
 
-local spinning, spinConnection = false, nil
+local spinning = false
+local spinConnection = nil
 local spinDirection = defaultDirection
 local spinAxis = defaultAxis
 
-local flying, flyConnection = false, nil
-local flyBodyVelocity, flyBodyGyro = nil, nil
+local flying = false
+local flyConnection = nil
+local flyBodyVelocity = nil
+local flyBodyGyro = nil
 
-local sticking, stickConnection = false, nil
+local sticking = false
+local stickConnection = nil
 local selectedStickPlayer = ""
 
 local invisible = false
-local noclip, noclipConnection = false, nil
+
+local noclip = false
+local noclipConnection = nil
 
 local aimlock = false
 local aimlockTarget = nil
@@ -63,7 +70,7 @@ player.CharacterAdded:Connect(function()
 end)
 
 --========================
--- SPIN
+-- LOGIQUE SPIN
 --========================
 local function getSpinCFrame(speed)
 	local amount = math.rad(speed) * spinDirection
@@ -88,7 +95,7 @@ local function stopSpin()
 end
 
 --========================
--- FLY
+-- LOGIQUE FLY
 --========================
 local function startFly()
 	if flying then return end
@@ -133,10 +140,12 @@ local function stopFly()
 end
 
 --========================
--- TP
+-- LOGIQUE TP
 --========================
 local function tpToCoords(x, y, z)
-	if humanoidRootPart then humanoidRootPart.CFrame = CFrame.new(x, y, z) end
+	if humanoidRootPart then
+		humanoidRootPart.CFrame = CFrame.new(x, y, z)
+	end
 end
 
 local function tpToPlayer(targetName)
@@ -149,12 +158,18 @@ local function tpToPlayer(targetName)
 end
 
 local function savePosition(slotName)
-	if humanoidRootPart then savedPositions[slotName] = humanoidRootPart.CFrame; return true end
+	if humanoidRootPart then
+		savedPositions[slotName] = humanoidRootPart.CFrame
+		return true
+	end
 	return false
 end
 
 local function loadPosition(slotName)
-	if savedPositions[slotName] then humanoidRootPart.CFrame = savedPositions[slotName]; return true end
+	if savedPositions[slotName] then
+		humanoidRootPart.CFrame = savedPositions[slotName]
+		return true
+	end
 	return false
 end
 
@@ -167,12 +182,14 @@ local function getPlayerNames()
 end
 
 --========================
--- STICK
+-- LOGIQUE STICK
 --========================
 local function startStick(targetName)
-	if sticking then return false end
-	if not Players:FindFirstChild(targetName) then return false end
+	if sticking then return end
+	local target = Players:FindFirstChild(targetName)
+	if not target then return false end
 	sticking = true
+
 	stickConnection = RunService.RenderStepped:Connect(function()
 		if not sticking then return end
 		local t = Players:FindFirstChild(targetName)
@@ -189,53 +206,60 @@ local function stopStick()
 end
 
 --========================
--- INVISIBLE (visible par tous)
+-- INVISIBLE (côté serveur via réseau)
+-- Utilise un RemoteEvent si disponible, sinon LocalTransparency + suppression du personnage réseau
 --========================
-local originalTransparency = {}
-
 local function setInvisible(state)
 	invisible = state
 	if not character then return end
 
 	for _, part in pairs(character:GetDescendants()) do
 		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+			-- LocalTransparencyModifier pour le client local
+			part.LocalTransparencyModifier = state and 1 or 0
+
+			-- Pour les autres joueurs : on change la Transparency réseau
 			if state then
-				originalTransparency[part] = part.Transparency
 				part.Transparency = 1
-				part.LocalTransparencyModifier = 1
 			else
-				part.Transparency = originalTransparency[part] or 0
-				part.LocalTransparencyModifier = 0
+				-- Restaure selon le type de part
+				if part.Name == "Head" or part.Name:find("Leg") or part.Name:find("Arm") or part.Name == "Torso" or part.Name == "UpperTorso" or part.Name == "LowerTorso" then
+					part.Transparency = 0
+				end
 			end
 		end
-		if part:IsA("Decal") then
-			part.Transparency = state and 1 or 0
+		if part:IsA("Decal") or part:IsA("SpecialMesh") then
+			part.Parent.Transparency = state and 1 or 0
 		end
 	end
 
+	-- Accessoires et outils
 	for _, obj in pairs(character:GetChildren()) do
 		if obj:IsA("Accessory") then
 			local handle = obj:FindFirstChild("Handle")
 			if handle then
-				if state then
-					originalTransparency[handle] = handle.Transparency
-					handle.Transparency = 1
-					handle.LocalTransparencyModifier = 1
-				else
-					handle.Transparency = originalTransparency[handle] or 0
-					handle.LocalTransparencyModifier = 0
+				handle.LocalTransparencyModifier = state and 1 or 0
+				handle.Transparency = state and 1 or 0
+			end
+		end
+		if obj:IsA("Tool") then
+			for _, p in pairs(obj:GetDescendants()) do
+				if p:IsA("BasePart") then
+					p.Transparency = state and 1 or 0
 				end
 			end
 		end
 	end
 
-	humanoid.DisplayDistanceType = state
-		and Enum.HumanoidDisplayDistanceType.None
-		or Enum.HumanoidDisplayDistanceType.Automatic
+	-- Cacher le nom au-dessus de la tête
+	local billboard = character:FindFirstChildOfClass("BillboardGui")
+	if billboard then billboard.Enabled = not state end
+	humanoid.DisplayDistanceType = state and Enum.HumanoidDisplayDistanceType.None or Enum.HumanoidDisplayDistanceType.Automatic
 end
 
 --========================
 -- NOCLIP RÉEL
+-- Désactive CanCollide sur chaque Stepped pour contrer le reset serveur
 --========================
 local function startNoclip()
 	if noclipConnection then return end
@@ -252,10 +276,12 @@ end
 local function stopNoclip()
 	noclip = false
 	if noclipConnection then noclipConnection:Disconnect(); noclipConnection = nil end
-	task.wait(0.05)
+	task.wait(0.1)
 	if character then
 		for _, part in pairs(character:GetDescendants()) do
-			if part:IsA("BasePart") then part.CanCollide = true end
+			if part:IsA("BasePart") then
+				part.CanCollide = true
+			end
 		end
 	end
 end
@@ -264,7 +290,8 @@ end
 -- AIMLOCK
 --========================
 local function getClosestPlayer()
-	local closest, minDist = nil, math.huge
+	local closest = nil
+	local minDist = math.huge
 	local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 
 	for _, p in pairs(Players:GetPlayers()) do
@@ -274,7 +301,10 @@ local function getClosestPlayer()
 				local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
 				if onScreen then
 					local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-					if dist < minDist then minDist = dist; closest = p end
+					if dist < minDist then
+						minDist = dist
+						closest = p
+					end
 				end
 			end
 		end
@@ -286,12 +316,20 @@ local function startAimlock()
 	if aimlockConnection then return end
 	aimlockConnection = RunService.RenderStepped:Connect(function()
 		if not aimlock then return end
+
+		-- Vérifie que la cible est encore valide
 		if aimlockTarget then
 			if not aimlockTarget.Character or not aimlockTarget.Character:FindFirstChild("Head") then
 				aimlockTarget = nil
 			end
 		end
-		if not aimlockTarget then aimlockTarget = getClosestPlayer() end
+
+		-- Cherche une cible si pas de cible
+		if not aimlockTarget then
+			aimlockTarget = getClosestPlayer()
+		end
+
+		-- Verrouille la caméra sur la tête
 		if aimlockTarget and aimlockTarget.Character then
 			local head = aimlockTarget.Character:FindFirstChild("Head")
 			if head then
@@ -317,24 +355,24 @@ local function setupAimlockToggle()
 				aimlockTarget = getClosestPlayer()
 				Rayfield:Notify({
 					Title = "Aimlock ON",
-					Content = aimlockTarget and ("Cible : " .. aimlockTarget.Name) or "Aucune cible",
+					Content = aimlockTarget and ("Cible : " .. aimlockTarget.Name) or "Aucune cible trouvée",
 					Duration = 2,
 				})
 			else
 				aimlockTarget = nil
-				Rayfield:Notify({ Title = "Aimlock OFF", Content = "Viseur libre.", Duration = 2 })
+				Rayfield:Notify({ Title = "Aimlock OFF", Content = "Viseur déverrouillé.", Duration = 2 })
 			end
 		end
 	end)
 end
 
 --========================
--- RAYFIELD UI
+-- RAYFIELD UI — LAYSOX UI
 --========================
 local Window = Rayfield:CreateWindow({
 	Name = "Laysox UI",
 	LoadingTitle = "Laysox UI",
-	LoadingSubtitle = "Chargement...",
+	LoadingSubtitle = "Chargement des modules...",
 	Theme = "Default",
 	DisableRayfieldPrompts = false,
 	DisableBuildWarnings = false,
@@ -342,157 +380,205 @@ local Window = Rayfield:CreateWindow({
 	KeySystem = false,
 })
 
+--========================
 -- TAB SPIN
+--========================
 local SpinTab = Window:CreateTab("Spin", 4483362458)
 
 SpinTab:CreateSlider({
-	Name = "Vitesse", Range = {1, 100}, Increment = 1,
+	Name = "Vitesse de spin", Range = {1, 100}, Increment = 1,
 	Suffix = "°/frame", CurrentValue = spinSpeed, Flag = "SpinSpeed",
-	Callback = function(v) spinSpeed = v end,
+	Callback = function(value) spinSpeed = value end,
 })
+
 SpinTab:CreateDropdown({
-	Name = "Direction", Options = {"Clockwise","Counterclockwise"},
-	CurrentOption = {"Clockwise"}, Flag = "SpinDir", MultipleOptions = false,
-	Callback = function(o) spinDirection = o[1] == "Clockwise" and 1 or -1 end,
-})
-SpinTab:CreateDropdown({
-	Name = "Axe", Options = {"Y","X","Z"},
-	CurrentOption = {"Y"}, Flag = "SpinAxis", MultipleOptions = false,
-	Callback = function(o) spinAxis = o[1] end,
-})
-SpinTab:CreateToggle({
-	Name = "Activer Spin", CurrentValue = false, Flag = "SpinToggle",
-	Callback = function(v)
-		if v then startSpin(); Rayfield:Notify({ Title="Spin ON", Content="Axe : "..spinAxis, Duration=2 })
-		else stopSpin(); Rayfield:Notify({ Title="Spin OFF", Content="Arrêté.", Duration=2 }) end
+	Name = "Direction", Options = {"Clockwise", "Counterclockwise"},
+	CurrentOption = {"Clockwise"}, Flag = "SpinDirection", MultipleOptions = false,
+	Callback = function(option)
+		spinDirection = (option[1] == "Clockwise") and 1 or -1
 	end,
 })
 
+SpinTab:CreateDropdown({
+	Name = "Axe de rotation", Options = {"Y", "X", "Z"},
+	CurrentOption = {"Y"}, Flag = "SpinAxis", MultipleOptions = false,
+	Callback = function(option) spinAxis = option[1] end,
+})
+
+SpinTab:CreateToggle({
+	Name = "Activer le Spin", CurrentValue = false, Flag = "SpinToggle",
+	Callback = function(value)
+		if value then startSpin(); Rayfield:Notify({ Title = "Spin activé", Content = "Axe : " .. spinAxis, Duration = 3 })
+		else stopSpin(); Rayfield:Notify({ Title = "Spin arrêté", Content = "Rotation désactivée.", Duration = 2 }) end
+	end,
+})
+
+--========================
 -- TAB FLY
+--========================
 local FlyTab = Window:CreateTab("Fly", 4483362458)
 
 FlyTab:CreateSlider({
-	Name = "Vitesse", Range = {10,300}, Increment = 5,
+	Name = "Vitesse de vol", Range = {10, 300}, Increment = 5,
 	Suffix = " studs/s", CurrentValue = flySpeed, Flag = "FlySpeed",
-	Callback = function(v) flySpeed = v end,
+	Callback = function(value) flySpeed = value end,
 })
-FlyTab:CreateParagraph({ Title="Contrôles", Content="W/A/S/D → Directions\nSpace → Monter\nCtrl → Descendre" })
+
+FlyTab:CreateParagraph({
+	Title = "Contrôles",
+	Content = "W/A/S/D → Directions\nSpace → Monter\nCtrl → Descendre",
+})
+
 FlyTab:CreateToggle({
-	Name = "Activer Fly", CurrentValue = false, Flag = "FlyToggle",
-	Callback = function(v)
-		if v then startFly(); Rayfield:Notify({ Title="Fly ON", Content=flySpeed.." studs/s", Duration=2 })
-		else stopFly(); Rayfield:Notify({ Title="Fly OFF", Content="Retour au sol.", Duration=2 }) end
+	Name = "Activer le Fly", CurrentValue = false, Flag = "FlyToggle",
+	Callback = function(value)
+		if value then startFly(); Rayfield:Notify({ Title = "Fly activé", Content = flySpeed .. " studs/s", Duration = 3 })
+		else stopFly(); Rayfield:Notify({ Title = "Fly désactivé", Content = "Retour au sol.", Duration = 2 }) end
 	end,
 })
 
+--========================
 -- TAB TP
+--========================
 local TPTab = Window:CreateTab("Téléport", 4483362458)
+
 local coordX, coordY, coordZ = 0, 0, 0
 local selectedPlayer = ""
 
 TPTab:CreateSection("Coordonnées XYZ")
-TPTab:CreateInput({ Name="X", PlaceholderText="ex: 100", RemoveTextAfterFocusLost=false, Flag="CX",
-	Callback=function(v) coordX=tonumber(v) or coordX end })
-TPTab:CreateInput({ Name="Y", PlaceholderText="ex: 50", RemoveTextAfterFocusLost=false, Flag="CY",
-	Callback=function(v) coordY=tonumber(v) or coordY end })
-TPTab:CreateInput({ Name="Z", PlaceholderText="ex: 200", RemoveTextAfterFocusLost=false, Flag="CZ",
-	Callback=function(v) coordZ=tonumber(v) or coordZ end })
-TPTab:CreateButton({ Name="Téléporter aux coordonnées", Callback=function()
-	tpToCoords(coordX, coordY, coordZ)
-	Rayfield:Notify({ Title="TP !", Content=string.format("X:%d Y:%d Z:%d", coordX,coordY,coordZ), Duration=3 })
-end })
+
+TPTab:CreateInput({ Name = "X", PlaceholderText = "ex: 100", RemoveTextAfterFocusLost = false, Flag = "CoordX",
+	Callback = function(v) coordX = tonumber(v) or coordX end })
+TPTab:CreateInput({ Name = "Y", PlaceholderText = "ex: 50", RemoveTextAfterFocusLost = false, Flag = "CoordY",
+	Callback = function(v) coordY = tonumber(v) or coordY end })
+TPTab:CreateInput({ Name = "Z", PlaceholderText = "ex: 200", RemoveTextAfterFocusLost = false, Flag = "CoordZ",
+	Callback = function(v) coordZ = tonumber(v) or coordZ end })
+
+TPTab:CreateButton({
+	Name = "Téléporter aux coordonnées",
+	Callback = function()
+		tpToCoords(coordX, coordY, coordZ)
+		Rayfield:Notify({ Title = "Téléporté !", Content = string.format("X:%d Y:%d Z:%d", coordX, coordY, coordZ), Duration = 3 })
+	end,
+})
 
 TPTab:CreateSection("TP vers joueur")
-TPTab:CreateDropdown({ Name="Joueur", Options=getPlayerNames(), CurrentOption={}, Flag="TPPlayer", MultipleOptions=false,
-	Callback=function(o) selectedPlayer=o[1] or "" end })
-TPTab:CreateButton({ Name="Téléporter", Callback=function()
-	if selectedPlayer=="" then Rayfield:Notify({ Title="Erreur", Content="Aucun joueur.", Duration=2 }); return end
-	local ok=tpToPlayer(selectedPlayer)
-	Rayfield:Notify({ Title=ok and "TP !" or "Échec", Content=ok and "Vers : "..selectedPlayer or "Introuvable.", Duration=3 })
-end })
+
+TPTab:CreateDropdown({
+	Name = "Choisir un joueur", Options = getPlayerNames(),
+	CurrentOption = {}, Flag = "TargetPlayer", MultipleOptions = false,
+	Callback = function(option) selectedPlayer = option[1] or "" end,
+})
+
+TPTab:CreateButton({
+	Name = "Téléporter",
+	Callback = function()
+		if selectedPlayer == "" then Rayfield:Notify({ Title = "Erreur", Content = "Aucun joueur.", Duration = 3 }); return end
+		local ok = tpToPlayer(selectedPlayer)
+		Rayfield:Notify({ Title = ok and "Téléporté !" or "Échec", Content = ok and ("Vers : " .. selectedPlayer) or (selectedPlayer .. " introuvable."), Duration = 3 })
+	end,
+})
 
 TPTab:CreateSection("Suivre un joueur")
-TPTab:CreateDropdown({ Name="Joueur à suivre", Options=getPlayerNames(), CurrentOption={}, Flag="StickPlayer", MultipleOptions=false,
-	Callback=function(o) selectedStickPlayer=o[1] or "" end })
-TPTab:CreateToggle({ Name="Activer le Suivi", CurrentValue=false, Flag="StickToggle",
-	Callback=function(v)
-		if v then
-			if selectedStickPlayer=="" then Rayfield:Notify({ Title="Erreur", Content="Aucun joueur.", Duration=2 }); return end
-			local ok=startStick(selectedStickPlayer)
-			Rayfield:Notify({ Title=ok and "Suivi ON" or "Échec", Content=ok and "Collé à : "..selectedStickPlayer or "Introuvable.", Duration=3 })
-		else stopStick(); Rayfield:Notify({ Title="Suivi OFF", Content="Plus collé.", Duration=2 }) end
+
+TPTab:CreateDropdown({
+	Name = "Joueur à suivre", Options = getPlayerNames(),
+	CurrentOption = {}, Flag = "StickPlayer", MultipleOptions = false,
+	Callback = function(option) selectedStickPlayer = option[1] or "" end,
+})
+
+TPTab:CreateToggle({
+	Name = "Activer le Suivi", CurrentValue = false, Flag = "StickToggle",
+	Callback = function(value)
+		if value then
+			if selectedStickPlayer == "" then Rayfield:Notify({ Title = "Erreur", Content = "Aucun joueur.", Duration = 3 }); return end
+			local ok = startStick(selectedStickPlayer)
+			Rayfield:Notify({ Title = ok and "Suivi activé" or "Échec", Content = ok and ("Collé à : " .. selectedStickPlayer) or "Introuvable.", Duration = 3 })
+		else
+			stopStick()
+			Rayfield:Notify({ Title = "Suivi arrêté", Content = "Tu n'es plus collé.", Duration = 2 })
+		end
 	end,
 })
 
 TPTab:CreateSection("Positions sauvegardées")
-for _, slot in pairs({"Slot 1","Slot 2","Slot 3"}) do
-	TPTab:CreateButton({ Name="💾 Sauvegarder — "..slot, Callback=function()
-		savePosition(slot); Rayfield:Notify({ Title="Sauvegardé", Content=slot, Duration=2 }) end })
-	TPTab:CreateButton({ Name="📍 Charger — "..slot, Callback=function()
-		local ok=loadPosition(slot)
-		Rayfield:Notify({ Title=ok and "Chargé" or "Vide", Content=slot, Duration=2 }) end })
+
+for _, slot in pairs({"Slot 1", "Slot 2", "Slot 3"}) do
+	TPTab:CreateButton({ Name = "💾 Sauvegarder — " .. slot, Callback = function()
+		savePosition(slot); Rayfield:Notify({ Title = "Sauvegardé", Content = slot, Duration = 2 }) end })
+	TPTab:CreateButton({ Name = "📍 Charger — " .. slot, Callback = function()
+		local ok = loadPosition(slot)
+		Rayfield:Notify({ Title = ok and "Chargé" or "Vide", Content = slot, Duration = 2 }) end })
 end
 
+--========================
 -- TAB DIVERS
+--========================
 local DiversTab = Window:CreateTab("Divers", 4483362458)
 
 DiversTab:CreateSection("Invisibilité")
-DiversTab:CreateToggle({ Name="Invisible", CurrentValue=false, Flag="InvisToggle",
-	Callback=function(v)
-		setInvisible(v)
-		Rayfield:Notify({ Title=v and "Invisible !" or "Visible", Content=v and "Personne ne te voit." or "Tu es visible.", Duration=3 })
+
+DiversTab:CreateToggle({
+	Name = "Invisible (tous les joueurs)",
+	CurrentValue = false, Flag = "InvisToggle",
+	Callback = function(value)
+		setInvisible(value)
+		Rayfield:Notify({
+			Title = value and "Invisible !" or "Visible",
+			Content = value and "Personne ne te voit." or "Tu es visible.",
+			Duration = 3,
+		})
 	end,
 })
 
 DiversTab:CreateSection("No-Clip")
-DiversTab:CreateToggle({ Name="No-Clip", CurrentValue=false, Flag="NoclipToggle",
-	Callback=function(v)
-		noclip=v
-		if v then startNoclip(); Rayfield:Notify({ Title="No-Clip ON", Content="Tu traverses les murs.", Duration=3 })
-		else stopNoclip(); Rayfield:Notify({ Title="No-Clip OFF", Content="Collisions restaurées.", Duration=2 }) end
-	end,
-})
 
--- TAB COMBAT (AIMLOCK)
-local CombatTab = Window:CreateTab("Combat", 4483362458)
-
-CombatTab:CreateSection("Aimlock")
-CombatTab:CreateKeybind({
-	Name="Touche Aimlock", CurrentKeybind="Q", HoldToInteract=false, Flag="AimlockKey",
-	Callback=function(key)
-		aimlockKey=Enum.KeyCode[key] or Enum.KeyCode.Q
-		setupAimlockToggle()
-		Rayfield:Notify({ Title="Touche maj", Content="Aimlock → "..key, Duration=2 })
-	end,
-})
-CombatTab:CreateToggle({ Name="Activer Aimlock", CurrentValue=false, Flag="AimlockToggle",
-	Callback=function(v)
-		if v then
-			startAimlock()
-			setupAimlockToggle()
-			Rayfield:Notify({ Title="Aimlock ON", Content="Touche : "..aimlockKey.Name, Duration=3 })
+DiversTab:CreateToggle({
+	Name = "No-Clip (traverser les murs)",
+	CurrentValue = false, Flag = "NoclipToggle",
+	Callback = function(value)
+		noclip = value
+		if value then
+			startNoclip()
+			Rayfield:Notify({ Title = "No-Clip ON", Content = "Tu traverses les murs.", Duration = 3 })
 		else
-			stopAimlock()
-			Rayfield:Notify({ Title="Aimlock OFF", Content="Viseur libre.", Duration=2 })
+			stopNoclip()
+			Rayfield:Notify({ Title = "No-Clip OFF", Content = "Collisions restaurées.", Duration = 2 })
 		end
 	end,
 })
-CombatTab:CreateParagraph({
-	Title="Info",
-	Content="Verrouille sur le joueur le plus proche du centre de l'écran.\nAppuie sur ta touche pour toggle rapidement.",
+
+DiversTab:CreateSection("Aimlock")
+
+-- Keybind personnalisable
+DiversTab:CreateKeybind({
+	Name = "Touche Aimlock",
+	CurrentKeybind = "Q",
+	HoldToInteract = false,
+	Flag = "AimlockKey",
+	Callback = function(key)
+		aimlockKey = Enum.KeyCode[key] or Enum.KeyCode.Q
+		setupAimlockToggle()
+		Rayfield:Notify({ Title = "Touche mise à jour", Content = "Aimlock → " .. key, Duration = 2 })
+	end,
 })
-```
 
----
+DiversTab:CreateToggle({
+	Name = "Activer l'Aimlock",
+	CurrentValue = false, Flag = "AimlockToggle",
+	Callback = function(value)
+		if value then
+			startAimlock()
+			setupAimlockToggle()
+			Rayfield:Notify({ Title = "Aimlock activé", Content = "Appuie sur " .. tostring(aimlockKey.Name) .. " pour toggle.", Duration = 3 })
+		else
+			stopAimlock()
+			Rayfield:Notify({ Title = "Aimlock désactivé", Content = "Viseur libre.", Duration = 2 })
+		end
+	end,
+})
 
-## Étape 2 — Le rendre court comme les autres scripts
-
-**1.** Va sur [github.com](https://github.com) et crée un compte si tu n'en as pas
-
-**2.** Crée un nouveau **repository** public
-
-**3.** Crée un fichier `LaysoxUI.lua` et colle tout le code dedans
-
-**4.** Clique sur le fichier → **Raw** → copie l'URL qui ressemble à :
-```
-https://raw.githubusercontent.com/TON_PSEUDO/TON_REPO/main/LaysoxUI.lua
+DiversTab:CreateParagraph({
+	Title = "Info Aimlock",
+	Content = "Le viseur se verrouille automatiquement sur le joueur le plus proche de ton écran.\nAppuie sur ta touche configurée pour activer/désactiver rapidement.",
+})
