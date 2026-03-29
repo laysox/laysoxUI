@@ -12,10 +12,10 @@ local humanoid = character:WaitForChild("Humanoid")
 local camera = workspace.CurrentCamera
 
 local Rayfield
-local ok, err = pcall(function()
+pcall(function()
     Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 end)
-if not ok or not Rayfield then
+if not Rayfield then
     task.wait(3)
     pcall(function()
         Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -28,6 +28,7 @@ local spinSpeed = 10
 local spinDirection = 1
 local spinAxis = "Y"
 local flySpeed = 50
+local flyKey = Enum.KeyCode.G
 
 local spinning, spinConnection = false, nil
 local flying, flyConnection = false, nil
@@ -39,10 +40,14 @@ local invisible = false
 local originalTransparency = {}
 local aimlock, aimlockConnection = false, nil
 local aimlockToggleConn = nil
+local flyToggleConn = nil
 local aimlockTarget = nil
 local aimlockKey = Enum.KeyCode.Q
 local savedPositions = {}
 local selectedPlayer = ""
+local espColor = Color3.fromRGB(255, 0, 0)
+local espEnabled = false
+local espObjects = {}
 
 -- UPDATE PERSO
 local function refresh()
@@ -63,6 +68,15 @@ player.CharacterAdded:Connect(function()
     aimlock = false
     aimlockTarget = nil
 end)
+
+-- TEAM CHECK
+local function isEnemy(p)
+    if not p or p == player then return false end
+    if player.Team and p.Team then
+        return player.Team ~= p.Team
+    end
+    return true -- pas de team = tous ennemis
+end
 
 -- SPIN
 local function getSpinCF()
@@ -124,6 +138,22 @@ local function stopFly()
     if flyBV then flyBV:Destroy(); flyBV = nil end
     if flyBG then flyBG:Destroy(); flyBG = nil end
     if humanoid then humanoid.PlatformStand = false end
+end
+
+local function setupFlyKey()
+    if flyToggleConn then flyToggleConn:Disconnect() end
+    flyToggleConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == flyKey then
+            if flying then
+                stopFly()
+                Rayfield:Notify({ Title="Fly OFF", Content="Retour au sol.", Duration=2 })
+            else
+                startFly()
+                Rayfield:Notify({ Title="Fly ON", Content=flySpeed.." studs/s", Duration=2 })
+            end
+        end
+    end)
 end
 
 -- TP
@@ -242,12 +272,102 @@ local function stopNoclip()
     end
 end
 
--- AIMLOCK
-local function getClosest()
+-- ESP
+local function removeESP(p)
+    if espObjects[p] then
+        for _, obj in pairs(espObjects[p]) do
+            if obj and obj.Parent then obj:Destroy() end
+        end
+        espObjects[p] = nil
+    end
+end
+
+local function createESP(p)
+    if not p.Character then return end
+    local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    removeESP(p)
+    espObjects[p] = {}
+
+    -- Box autour du joueur via SelectionBox
+    local selectionBox = Instance.new("SelectionBox")
+    selectionBox.Color3 = espColor
+    selectionBox.LineThickness = 0.05
+    selectionBox.SurfaceTransparency = 0.8
+    selectionBox.SurfaceColor3 = espColor
+    selectionBox.Adornee = p.Character
+    selectionBox.Parent = workspace.CurrentCamera
+    table.insert(espObjects[p], selectionBox)
+
+    -- Nom au dessus
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 100, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.Adornee = hrp
+    billboard.AlwaysOnTop = true
+    billboard.Parent = workspace.CurrentCamera
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = espColor
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.Text = p.Name
+    label.Parent = billboard
+
+    table.insert(espObjects[p], billboard)
+end
+
+local function updateESP()
+    if not espEnabled then
+        for p, _ in pairs(espObjects) do removeESP(p) end
+        return
+    end
+    for _, p in pairs(Players:GetPlayers()) do
+        if isEnemy(p) then
+            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                if not espObjects[p] then createESP(p) end
+                -- Update couleur en temps réel
+                if espObjects[p] then
+                    for _, obj in pairs(espObjects[p]) do
+                        if obj:IsA("SelectionBox") then
+                            obj.Color3 = espColor
+                            obj.SurfaceColor3 = espColor
+                        elseif obj:IsA("BillboardGui") then
+                            local lbl = obj:FindFirstChildOfClass("TextLabel")
+                            if lbl then lbl.TextColor3 = espColor end
+                        end
+                    end
+                end
+            else
+                removeESP(p)
+            end
+        else
+            removeESP(p)
+        end
+    end
+    -- Nettoyer les joueurs déconnectés
+    for p, _ in pairs(espObjects) do
+        if not p.Parent then removeESP(p) end
+    end
+end
+
+Players.PlayerRemoving:Connect(function(p)
+    removeESP(p)
+end)
+
+RunService.RenderStepped:Connect(function()
+    updateESP()
+end)
+
+-- AIMLOCK (vise uniquement les ennemis)
+local function getClosestEnemy()
     local closest, minD = nil, math.huge
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
+        if isEnemy(p) and p.Character then
             local head = p.Character:FindFirstChild("Head")
             if head then
                 local sp, onScreen = camera:WorldToViewportPoint(head.Position)
@@ -266,15 +386,26 @@ local function startAimlock()
     aimlockConnection = RunService.RenderStepped:Connect(function()
         if not aimlock then return end
         if aimlockTarget then
-            if not aimlockTarget.Character or not aimlockTarget.Character:FindFirstChild("Head") then
+            if not aimlockTarget.Character
+                or not aimlockTarget.Character:FindFirstChild("Head")
+                or not isEnemy(aimlockTarget) then
                 aimlockTarget = nil
             end
         end
-        if not aimlockTarget then aimlockTarget = getClosest() end
+        if not aimlockTarget then aimlockTarget = getClosestEnemy() end
         if aimlockTarget and aimlockTarget.Character then
             local head = aimlockTarget.Character:FindFirstChild("Head")
             if head then
+                -- Verrouille la caméra ET le MouseDelta pour que les tirs suivent
+                local dir = (head.Position - camera.CFrame.Position).Unit
                 camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
+                -- Force le character à regarder dans la même direction
+                if humanoidRootPart then
+                    humanoidRootPart.CFrame = CFrame.new(
+                        humanoidRootPart.Position,
+                        Vector3.new(head.Position.X, humanoidRootPart.Position.Y, head.Position.Z)
+                    )
+                end
             end
         end
     end)
@@ -293,7 +424,7 @@ local function setupAimlockKey()
         if input.KeyCode == aimlockKey then
             aimlock = not aimlock
             if aimlock then
-                aimlockTarget = getClosest()
+                aimlockTarget = getClosestEnemy()
                 Rayfield:Notify({
                     Title = "Aimlock ON",
                     Content = aimlockTarget and "Cible : "..aimlockTarget.Name or "Aucune cible",
@@ -306,6 +437,10 @@ local function setupAimlockKey()
         end
     end)
 end
+
+-- INIT touches par défaut
+setupFlyKey()
+setupAimlockKey()
 
 -- UI
 local Window = Rayfield:CreateWindow({
@@ -353,9 +488,20 @@ FlyTab:CreateSlider({
     Suffix = " studs/s", CurrentValue = 50, Flag = "FlySpeed",
     Callback = function(v) flySpeed = v end,
 })
+FlyTab:CreateKeybind({
+    Name = "Touche Fly",
+    CurrentKeybind = "G",
+    HoldToInteract = false,
+    Flag = "FlyKey",
+    Callback = function(key)
+        flyKey = Enum.KeyCode[key] or Enum.KeyCode.G
+        setupFlyKey()
+        Rayfield:Notify({ Title="Touche Fly maj", Content="Fly → "..key, Duration=2 })
+    end,
+})
 FlyTab:CreateParagraph({
     Title = "Contrôles",
-    Content = "W/A/S/D → Directions\nSpace → Monter\nCtrl → Descendre",
+    Content = "Touche configurée → Toggle Fly\nW/A/S/D → Directions\nSpace → Monter\nCtrl → Descendre",
 })
 FlyTab:CreateToggle({
     Name = "Activer Fly", CurrentValue = false, Flag = "FlyToggle",
@@ -451,7 +597,7 @@ CombatTab:CreateKeybind({
     Callback = function(key)
         aimlockKey = Enum.KeyCode[key] or Enum.KeyCode.Q
         setupAimlockKey()
-        Rayfield:Notify({ Title="Touche maj", Content="Aimlock → "..key, Duration=2 })
+        Rayfield:Notify({ Title="Touche Aimlock maj", Content="Aimlock → "..key, Duration=2 })
     end,
 })
 CombatTab:CreateToggle({
@@ -469,5 +615,39 @@ CombatTab:CreateToggle({
 })
 CombatTab:CreateParagraph({
     Title = "Info",
-    Content = "Se verrouille sur le joueur le plus proche du centre de l'écran.\nAppuie sur ta touche pour toggle rapidement en jeu.",
+    Content = "Vise uniquement les ennemis (équipe adverse).\nAppuie sur ta touche pour toggle rapidement.",
+})
+
+CombatTab:CreateSection("ESP Ennemis")
+CombatTab:CreateToggle({
+    Name = "Activer ESP", CurrentValue=false, Flag="ESPToggle",
+    Callback=function(v)
+        espEnabled = v
+        if not v then
+            for p, _ in pairs(espObjects) do removeESP(p) end
+        end
+        Rayfield:Notify({ Title=v and "ESP ON" or "ESP OFF", Content=v and "Ennemis surlignés." or "ESP désactivé.", Duration=2 })
+    end,
+})
+CombatTab:CreateDropdown({
+    Name = "Couleur ESP",
+    Options = {"Rouge","Vert","Bleu","Jaune","Orange","Violet","Blanc"},
+    CurrentOption = {"Rouge"},
+    Flag = "ESPColor",
+    MultipleOptions = false,
+    Callback = function(o)
+        local colors = {
+            Rouge  = Color3.fromRGB(255, 0, 0),
+            Vert   = Color3.fromRGB(0, 255, 0),
+            Bleu   = Color3.fromRGB(0, 100, 255),
+            Jaune  = Color3.fromRGB(255, 255, 0),
+            Orange = Color3.fromRGB(255, 140, 0),
+            Violet = Color3.fromRGB(180, 0, 255),
+            Blanc  = Color3.fromRGB(255, 255, 255),
+        }
+        espColor = colors[o[1]] or Color3.fromRGB(255, 0, 0)
+        -- Reset ESP pour appliquer nouvelle couleur
+        for p, _ in pairs(espObjects) do removeESP(p) end
+        Rayfield:Notify({ Title="Couleur ESP", Content="Couleur → "..o[1], Duration=2 })
+    end,
 })
