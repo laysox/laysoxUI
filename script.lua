@@ -27,6 +27,7 @@ if not Rayfield then return end
 
 -- CONFIG
 local Config = {
+    -- Aimbot
     AimbotToggle = false,
     AimbotPart = "Head",
     RightMouseDown = false,
@@ -35,12 +36,14 @@ local Config = {
     LockOnTarget = nil,
     ShowFOV = true,
     WallCheck = true,
+    -- ESP
     ShowESP = false,
     EnemyColor = Color3.fromRGB(255, 0, 0),
     BlinkingESP = false,
     HPESP = true,
     ESPTransparency = 0.3,
     ShowNameTags = true,
+    -- Player
     WalkSpeed = false,
     WalkSpeedValue = 25.2,
     JumpPower = false,
@@ -51,6 +54,7 @@ local Config = {
     FlySpeed = 100,
     Smoke = false,
     Crosshair = false,
+    -- Fake
     UseFakeName = false,
     UseFakeDisplayName = false,
     FakeName = "",
@@ -63,27 +67,35 @@ local noclippedParts = {}
 local storedNametags = {}
 local InfiniteJumpConnection = nil
 local DrawingCircle = nil
+
 local originalName = player.Name
 local originalDisplayName = player.DisplayName
 
--- VARIABLES
+-- SPIN
 local spinSpeed = 10
 local spinDirection = 1
 local spinAxis = "Y"
 local spinning, spinConnection = false, nil
 
+-- FLY KEY
+local flyKey = Enum.KeyCode.G
+local flyToggleConn = nil
+
+-- STICK
 local sticking, stickConnection = false, nil
 local stickTarget = ""
 
+-- INVISIBLE
 local invisible = false
 local originalTransparency = {}
 
+-- AIMLOCK KEY
+local aimlockKey = Enum.KeyCode.Q
+local aimlockToggleConn = nil
+
+-- SAVED POS
 local savedPositions = {}
 local selectedPlayer = ""
-
--- KEYBINDS stockés comme strings
-local aimlockKeyName = "Q"
-local flyKeyName = "G"
 
 -- UPDATE PERSO
 local function refresh()
@@ -101,7 +113,6 @@ player.CharacterAdded:Connect(function()
     invisible = false
     Config.AimbotToggle = false
     Config.LockOnTarget = nil
-    Config.Fly = false
 end)
 
 -- TEAM CHECK
@@ -142,6 +153,7 @@ local function startFly()
     Config.Fly = true
     local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
+
     if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
     if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
 
@@ -186,6 +198,22 @@ local function stopFly()
         if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
         if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
     end
+end
+
+local function setupFlyKey()
+    if flyToggleConn then flyToggleConn:Disconnect() end
+    flyToggleConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == flyKey then
+            if Config.Fly then
+                stopFly()
+                Rayfield:Notify({ Title="Fly OFF", Content="Retour au sol.", Duration=2 })
+            else
+                startFly()
+                Rayfield:Notify({ Title="Fly ON", Content=Config.FlySpeed.." studs/s", Duration=2 })
+            end
+        end
+    end)
 end
 
 -- TP
@@ -266,7 +294,8 @@ local function setInvis(state)
             if h then
                 if state then
                     originalTransparency[h] = h.Transparency
-                    h.Transparency = 1; h.LocalTransparencyModifier = 1
+                    h.Transparency = 1
+                    h.LocalTransparencyModifier = 1
                 else
                     h.Transparency = originalTransparency[h] or 0
                     h.LocalTransparencyModifier = 0
@@ -385,10 +414,10 @@ end)
 -- FAKE NAME
 local function processtext(text)
     if type(text) ~= "string" then return text end
-    if Config.UseFakeName and originalName and Config.FakeName ~= "" then
+    if Config.UseFakeName and originalName and Config.FakeName then
         text = string.gsub(text, originalName, Config.FakeName)
     end
-    if Config.UseFakeDisplayName and originalDisplayName and Config.FakeDisplayName ~= "" then
+    if Config.UseFakeDisplayName and originalDisplayName and Config.FakeDisplayName then
         text = string.gsub(text, originalDisplayName, Config.FakeDisplayName)
     end
     return text
@@ -398,8 +427,12 @@ local function hookUIObject(obj)
     if obj:IsA("TextBox") or obj:IsA("TextLabel") or obj:IsA("TextButton") then
         pcall(function()
             obj.Text = processtext(obj.Text)
+            obj.Name = processtext(obj.Name)
             obj.Changed:Connect(function(prop)
-                if prop == "Text" then obj.Text = processtext(obj.Text) end
+                if prop == "Text" or prop == "Name" then
+                    obj.Text = processtext(obj.Text)
+                    obj.Name = processtext(obj.Name)
+                end
             end)
         end)
     end
@@ -408,7 +441,7 @@ end
 for _, v in next, game:GetDescendants() do hookUIObject(v) end
 game.DescendantAdded:Connect(hookUIObject)
 
--- AIMBOT
+-- AIMBOT (logique du script Rivals)
 if Drawing then
     DrawingCircle = Drawing.new("Circle")
     DrawingCircle.Thickness = 1
@@ -485,9 +518,10 @@ local function isLockedTargetValid()
 end
 
 table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        Config.RightMouseDown = true
+    if not processed then
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            Config.RightMouseDown = true
+        end
     end
 end))
 
@@ -519,6 +553,22 @@ table.insert(connections, Players.PlayerRemoving:Connect(function(p)
     if Config.LockOnTarget == p then Config.LockOnTarget = nil end
 end))
 
+-- Keybind aimbot
+local function setupAimlockKey()
+    if aimlockToggleConn then aimlockToggleConn:Disconnect() end
+    aimlockToggleConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == aimlockKey then
+            Config.AimbotToggle = not Config.AimbotToggle
+            Rayfield:Notify({
+                Title = Config.AimbotToggle and "Aimbot ON" or "Aimbot OFF",
+                Content = Config.AimbotToggle and "Maintiens clic droit pour viser." or "Aimbot désactivé.",
+                Duration = 2,
+            })
+        end
+    end)
+end
+
 -- ESP
 local function ClearHighlights()
     for _, p in pairs(Players:GetPlayers()) do
@@ -547,9 +597,11 @@ local function RefreshHighlights()
                     storedNametags[p] = nil
                 end
             end
+
             local existingHL = char:FindFirstChild("ESPHighlight")
             local existingBB = char:FindFirstChild("ESPNameTag")
             local shouldBlink = Config.BlinkingESP and (tick() % 4 < 2)
+
             if Config.ShowESP and (not Config.BlinkingESP or shouldBlink) then
                 if not existingHL then
                     local hl = Instance.new("Highlight")
@@ -629,37 +681,9 @@ task.spawn(function()
     end
 end)
 
--- ========================
--- KEYBINDS GLOBAUX (InputBegan unique)
--- Fix keybind aimlock et fly
--- ========================
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-
-    local keyName = input.KeyCode.Name
-
-    -- AIMLOCK TOGGLE
-    if keyName == aimlockKeyName then
-        Config.AimbotToggle = not Config.AimbotToggle
-        Rayfield:Notify({
-            Title = Config.AimbotToggle and "Aimbot ON" or "Aimbot OFF",
-            Content = Config.AimbotToggle and "Maintiens clic droit pour viser." or "Aimbot désactivé.",
-            Duration = 2,
-        })
-    end
-
-    -- FLY TOGGLE
-    if keyName == flyKeyName then
-        if Config.Fly then
-            stopFly()
-            Rayfield:Notify({ Title="Fly OFF", Content="Retour au sol.", Duration=2 })
-        else
-            startFly()
-            Rayfield:Notify({ Title="Fly ON", Content=Config.FlySpeed.." studs/s", Duration=2 })
-        end
-    end
-end)
+-- INIT
+setupFlyKey()
+setupAimlockKey()
 
 -- ========================
 -- UI
@@ -702,7 +726,7 @@ SpinTab:CreateToggle({
 
 -- TAB AIMBOT
 local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
-local AimbotToggleUI = AimbotTab:CreateToggle({
+local AimbotToggl = AimbotTab:CreateToggle({
     Name = "Activer Aimbot", CurrentValue = false, Flag = "AimbotTrigger",
     Callback = function(v) Config.AimbotToggle = v end,
 })
@@ -719,11 +743,11 @@ AimbotTab:CreateToggle({
 })
 AimbotTab:CreateSlider({
     Name = "FOV", Range = {10,600}, Increment = 1,
-    Suffix = " px", CurrentValue = 150, Flag = "AimbotFov",
+    Suffix = "px", CurrentValue = 150, Flag = "AimbotFov",
     Callback = function(v) Config.FOV = v end,
 })
 AimbotTab:CreateSlider({
-    Name = "Sensibilité", Range = {0.01,1}, Increment = 0.01,
+    Name = "Sensibilité (vitesse du lock)", Range = {0.01,1}, Increment = 0.01,
     Suffix = "", CurrentValue = 0.3, Flag = "AimbotSensitivity",
     Callback = function(v) Config.Sensitivity = v end,
 })
@@ -733,27 +757,20 @@ AimbotTab:CreateDropdown({
     CurrentOption = {"Head"},
     Callback = function(o) Config.AimbotPart = o[1] end,
 })
-
--- KEYBIND AIMBOT (stocke juste le nom de la touche)
-local allKeys = {"Q","E","R","T","F","H","J","K","L","Z","X","C","V","B","N","M",
-    "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
-    "One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Zero",
-    "LeftAlt","RightAlt","LeftShift","RightShift","Tab","CapsLock"}
-
-AimbotTab:CreateDropdown({
+AimbotTab:CreateKeybind({
     Name = "Touche Aimbot Toggle",
-    Options = allKeys,
-    CurrentOption = {"Q"},
-    Flag = "AimlockKeyDropdown",
-    MultipleOptions = false,
-    Callback = function(o)
-        aimlockKeyName = o[1]
-        Rayfield:Notify({ Title="Touche Aimbot", Content="Aimbot → "..o[1], Duration=2 })
+    CurrentKeybind = "Q",
+    HoldToInteract = false,
+    Flag = "AimlockKey",
+    Callback = function(key)
+        aimlockKey = Enum.KeyCode[key] or Enum.KeyCode.Q
+        setupAimlockKey()
+        Rayfield:Notify({ Title="Touche Aimbot maj", Content="Aimbot → "..key, Duration=2 })
     end,
 })
 AimbotTab:CreateParagraph({
     Title = "Comment utiliser",
-    Content = "Active l'aimbot puis maintiens CLIC DROIT pour viser.\nVise uniquement les ennemis.\nUtilise la touche configurée pour toggle.",
+    Content = "Active l'aimbot puis maintiens CLIC DROIT pour viser.\nL'aimbot vise uniquement les ennemis (équipe adverse).\nUtilise ta touche configurée pour toggle rapidement.",
 })
 
 -- TAB ESP
@@ -775,12 +792,12 @@ ESPTab:CreateToggle({
     Callback = function(v) Config.HPESP = v; RefreshHighlights() end,
 })
 ESPTab:CreateSlider({
-    Name = "Transparence", Range = {0,1}, Increment = 0.05,
+    Name = "Transparence ESP", Range = {0,1}, Increment = 0.05,
     CurrentValue = 0.3, Flag = "ESPTransparency",
     Callback = function(v) Config.ESPTransparency = v; RefreshHighlights() end,
 })
 ESPTab:CreateColorPicker({
-    Name = "Couleur ESP",
+    Name = "Couleur ESP Ennemis",
     Color = Color3.fromRGB(255,0,0),
     Flag = "ESPEnemyColor",
     Callback = function(c) Config.EnemyColor = c; RefreshHighlights() end,
@@ -795,31 +812,28 @@ ESPTab:CreateButton({ Name="Reset Touche ESP", Callback=function() ESPBind:Set("
 local FlyTab = Window:CreateTab("Fly", 4483362458)
 FlyTab:CreateSlider({
     Name = "Vitesse Fly", Range = {50,500}, Increment = 10,
-    Suffix = " studs/s", CurrentValue = 100, Flag = "FlySpeedSlider",
+    Suffix = " studs/s", CurrentValue = 100, Flag = "FlySpeed",
     Callback = function(v) Config.FlySpeed = v end,
 })
 local FlyToggleUI = FlyTab:CreateToggle({
-    Name = "Activer Fly", CurrentValue = false, Flag = "FlyToggleUI",
+    Name = "Activer Fly", CurrentValue = false, Flag = "FlyToggle",
     Callback = function(v)
         if v then startFly() else stopFly() end
     end,
 })
-
--- KEYBIND FLY via dropdown
-FlyTab:CreateDropdown({
-    Name = "Touche Fly Toggle",
-    Options = allKeys,
-    CurrentOption = {"G"},
-    Flag = "FlyKeyDropdown",
-    MultipleOptions = false,
-    Callback = function(o)
-        flyKeyName = o[1]
-        Rayfield:Notify({ Title="Touche Fly", Content="Fly → "..o[1], Duration=2 })
+local FlyBind = FlyTab:CreateKeybind({
+    Name = "Touche Fly", CurrentKeybind = "G", HoldToInteract = false, Flag = "FlyBind",
+    Callback = function(key)
+        flyKey = Enum.KeyCode[key] or Enum.KeyCode.G
+        setupFlyKey()
+        Rayfield:Notify({ Title="Touche Fly maj", Content="Fly → "..key, Duration=2 })
+        FlyToggleUI:Set(not Config.Fly)
     end,
 })
+FlyTab:CreateButton({ Name="Reset Touche Fly", Callback=function() FlyBind:Set("G") end })
 FlyTab:CreateParagraph({
     Title = "Contrôles",
-    Content = "W/A/S/D → Directions\nSpace → Monter\nCtrl → Descendre\nTouche configurée → Toggle Fly",
+    Content = "W/A/S/D → Directions\nSpace → Monter\nCtrl → Descendre\nTouche configurée → Toggle",
 })
 
 -- TAB PLAYER
@@ -917,7 +931,7 @@ TPTab:CreateToggle({ Name="Activer le Suivi", CurrentValue=false, Flag="StickTog
                 Rayfield:Notify({ Title="Erreur", Content="Aucun joueur.", Duration=2 }); return
             end
             local ok=startStick(stickTarget)
-            Rayfield:Notify({ Title=ok and "Suivi ON" or "Échec", Content=ok and "Collé : "..stickTarget or "Introuvable.", Duration=3 })
+            Rayfield:Notify({ Title=ok and "Suivi ON" or "Échec", Content=ok and "Collé à : "..stickTarget or "Introuvable.", Duration=3 })
         else
             stopStick()
             Rayfield:Notify({ Title="Suivi OFF", Content="Plus collé.", Duration=2 })
@@ -936,6 +950,7 @@ end
 
 -- TAB DIVERS
 local DiversTab = Window:CreateTab("Divers", 4483362458)
+
 DiversTab:CreateSection("Invisibilité")
 DiversTab:CreateToggle({ Name="Invisible", CurrentValue=false, Flag="InvisToggle",
     Callback=function(v)
@@ -943,31 +958,30 @@ DiversTab:CreateToggle({ Name="Invisible", CurrentValue=false, Flag="InvisToggle
         Rayfield:Notify({ Title=v and "Invisible !" or "Visible", Content=v and "Personne ne te voit." or "Tu es visible.", Duration=3 })
     end,
 })
+
 DiversTab:CreateSection("Smoke")
 DiversTab:CreateToggle({ Name="Supprimer les grenades fumigènes", CurrentValue=false, Flag="SmokeToggle",
     Callback=function(v) Config.Smoke = v end,
 })
 
--- TAB FAKE / SPOOFER
-local FakeTab = Window:CreateTab("Spoofer", 4483362458)
-
-FakeTab:CreateSection("Faux Nom")
+-- TAB FAKE
+local FakeTab = Window:CreateTab("Fake", 4483362458)
 FakeTab:CreateToggle({
-    Name = "Activer Faux Pseudo", CurrentValue = false, Flag = "EnableFakeName",
+    Name = "Faux Pseudo", CurrentValue = false, Flag = "EnableFakeName",
     Callback = function(v)
         Config.UseFakeName = v
         for _, obj in next, game:GetDescendants() do hookUIObject(obj) end
     end,
 })
 FakeTab:CreateToggle({
-    Name = "Activer Faux Display Name", CurrentValue = false, Flag = "EnableFakeDisplayName",
+    Name = "Faux Display Name", CurrentValue = false, Flag = "EnableFakeDisplayName",
     Callback = function(v)
         Config.UseFakeDisplayName = v
         for _, obj in next, game:GetDescendants() do hookUIObject(obj) end
     end,
 })
 FakeTab:CreateInput({
-    Name = "Pseudo", PlaceholderText = "Faux pseudo", RemoveTextAfterFocusLost = false,
+    Name = "Username", PlaceholderText = "Faux pseudo", RemoveTextAfterFocusLost = false,
     Callback = function(v)
         Config.FakeName = v
         if Config.UseFakeName then pcall(function() player.Name = v end) end
@@ -980,32 +994,22 @@ FakeTab:CreateInput({
         if Config.UseFakeDisplayName then pcall(function() player.DisplayName = v end) end
     end,
 })
-
-FakeTab:CreateSection("Device Spoofer")
-FakeTab:CreateDropdown({
-    Name = "Simuler un appareil",
-    Options = {"PC (MouseKeyboard)", "Mobile (Touch)", "Console (Gamepad)"},
-    CurrentOption = {"PC (MouseKeyboard)"},
-    Flag = "DeviceSpoofer",
-    MultipleOptions = false,
-    Callback = function(o)
-        local deviceMap = {
-            ["PC (MouseKeyboard)"] = "MouseKeyboard",
-            ["Mobile (Touch)"] = "Touch",
-            ["Console (Gamepad)"] = "Gamepad",
-        }
-        local deviceType = deviceMap[o[1]]
-        if deviceType then
-            pcall(function()
-                game:GetService("ReplicatedStorage")
-                    :WaitForChild("Remotes")
-                    :WaitForChild("Replication")
-                    :WaitForChild("Fighter")
-                    :WaitForChild("SetControls")
-                    :FireServer(deviceType)
-            end)
-            Rayfield:Notify({ Title="Device Spoofer", Content="Appareil → "..o[1], Duration=3 })
-        end
+FakeTab:CreateButton({
+    Name = "Simuler Mobile",
+    Callback = function()
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Replication"):WaitForChild("Fighter"):WaitForChild("SetControls"):FireServer("Touch")
+    end,
+})
+FakeTab:CreateButton({
+    Name = "Simuler PC",
+    Callback = function()
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Replication"):WaitForChild("Fighter"):WaitForChild("SetControls"):FireServer("MouseKeyboard")
+    end,
+})
+FakeTab:CreateButton({
+    Name = "Simuler Console",
+    Callback = function()
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Replication"):WaitForChild("Fighter"):WaitForChild("SetControls"):FireServer("Gamepad")
     end,
 })
 
