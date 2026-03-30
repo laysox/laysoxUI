@@ -27,6 +27,7 @@ if not Rayfield then return end
 
 -- CONFIG
 local Config = {
+    -- Aimbot
     AimbotToggle = false,
     AimbotPart = "Head",
     RightMouseDown = false,
@@ -35,12 +36,18 @@ local Config = {
     LockOnTarget = nil,
     ShowFOV = true,
     WallCheck = true,
+    -- Silent Aim
+    SilentAimToggle = false,
+    SilentAimPart = "Head",
+    SilentAimFOV = 200,
+    -- ESP
     ShowESP = false,
     EnemyColor = Color3.fromRGB(255, 0, 0),
     BlinkingESP = false,
     HPESP = true,
     ESPTransparency = 0.3,
     ShowNameTags = true,
+    -- Player
     WalkSpeed = false,
     WalkSpeedValue = 25.2,
     JumpPower = false,
@@ -50,7 +57,7 @@ local Config = {
     Fly = false,
     FlySpeed = 100,
     Smoke = false,
-    Crosshair = false,
+    -- Fake
     UseFakeName = false,
     UseFakeDisplayName = false,
     FakeName = "",
@@ -66,7 +73,6 @@ local DrawingCircle = nil
 local originalName = player.Name
 local originalDisplayName = player.DisplayName
 
--- VARIABLES
 local spinSpeed = 10
 local spinDirection = 1
 local spinAxis = "Y"
@@ -81,7 +87,6 @@ local originalTransparency = {}
 local savedPositions = {}
 local selectedPlayer = ""
 
--- KEYBINDS stockés comme strings
 local aimlockKeyName = "Q"
 local flyKeyName = "G"
 
@@ -102,14 +107,13 @@ player.CharacterAdded:Connect(function()
     Config.AimbotToggle = false
     Config.LockOnTarget = nil
     Config.Fly = false
+    Config.SilentAimToggle = false
 end)
 
 -- TEAM CHECK
 local function isEnemy(p)
     if not p or p == player then return false end
-    if player.Team and p.Team then
-        return player.Team ~= p.Team
-    end
+    if player.Team and p.Team then return player.Team ~= p.Team end
     return true
 end
 
@@ -364,10 +368,7 @@ local function startInfiniteJump()
 end
 
 local function stopInfiniteJump()
-    if InfiniteJumpConnection then
-        InfiniteJumpConnection:Disconnect()
-        InfiniteJumpConnection = nil
-    end
+    if InfiniteJumpConnection then InfiniteJumpConnection:Disconnect(); InfiniteJumpConnection = nil end
 end
 
 -- SMOKE
@@ -408,7 +409,91 @@ end
 for _, v in next, game:GetDescendants() do hookUIObject(v) end
 game.DescendantAdded:Connect(hookUIObject)
 
--- AIMBOT
+-- ========================
+-- SILENT AIM
+-- ========================
+local silentAimConnection = nil
+
+local function getSilentAimTarget()
+    local closest, minDist = nil, Config.SilentAimFOV
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    for _, p in pairs(Players:GetPlayers()) do
+        if isEnemy(p) and p.Character then
+            local part = p.Character:FindFirstChild(Config.SilentAimPart)
+            if part then
+                local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        closest = p
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+local function startSilentAim()
+    if silentAimConnection then return end
+    -- Hook sur le raycast de la souris pour rediriger les tirs
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
+
+        if Config.SilentAimToggle and method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
+            local target = getSilentAimTarget()
+            if target and target.Character then
+                local part = target.Character:FindFirstChild(Config.SilentAimPart)
+                if part then
+                    if args[1] and typeof(args[1]) == "Ray" then
+                        args[1] = Ray.new(args[1].Origin, (part.Position - args[1].Origin).Unit * args[1].Direction.Magnitude)
+                    end
+                end
+            end
+        end
+
+        return oldNamecall(self, table.unpack(args))
+    end)
+end
+
+local function startSilentAimV2()
+    -- Version alternative via WorldRoot:Raycast
+    if silentAimConnection then return end
+    local oldNamecall
+    if hookmetamethod then
+        pcall(function()
+            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+
+                if Config.SilentAimToggle then
+                    if method == "Raycast" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
+                        local target = getSilentAimTarget()
+                        if target and target.Character then
+                            local part = target.Character:FindFirstChild(Config.SilentAimPart)
+                            if part and args[1] and args[2] then
+                                if typeof(args[2]) == "Vector3" then
+                                    args[2] = (part.Position - args[1]).Unit * args[2].Magnitude
+                                elseif typeof(args[1]) == "Ray" then
+                                    args[1] = Ray.new(args[1].Origin, (part.Position - args[1].Origin).Unit * args[1].Direction.Magnitude)
+                                end
+                            end
+                        end
+                    end
+                end
+
+                return oldNamecall(self, table.unpack(args))
+            end)
+        end)
+    end
+end
+
+-- ========================
+-- AIMBOT (Rivals style)
+-- ========================
 if Drawing then
     DrawingCircle = Drawing.new("Circle")
     DrawingCircle.Thickness = 1
@@ -629,27 +714,28 @@ task.spawn(function()
     end
 end)
 
--- ========================
--- KEYBINDS GLOBAUX (InputBegan unique)
--- Fix keybind aimlock et fly
--- ========================
+-- KEYBINDS GLOBAUX
+local allKeys = {
+    "Q","E","R","T","F","G","H","J","K","L","Z","X","C","V","B","N","M",
+    "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
+    "One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Zero",
+    "LeftAlt","RightAlt","LeftShift","RightShift","Tab","CapsLock"
+}
+
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-
     local keyName = input.KeyCode.Name
 
-    -- AIMLOCK TOGGLE
     if keyName == aimlockKeyName then
         Config.AimbotToggle = not Config.AimbotToggle
         Rayfield:Notify({
             Title = Config.AimbotToggle and "Aimbot ON" or "Aimbot OFF",
-            Content = Config.AimbotToggle and "Maintiens clic droit pour viser." or "Aimbot désactivé.",
+            Content = Config.AimbotToggle and "Clic droit pour viser." or "Désactivé.",
             Duration = 2,
         })
     end
 
-    -- FLY TOGGLE
     if keyName == flyKeyName then
         if Config.Fly then
             stopFly()
@@ -661,13 +747,16 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
+-- Initialise Silent Aim
+pcall(startSilentAimV2)
+
 -- ========================
--- UI
+-- UI — LSX V1
 -- ========================
 local Window = Rayfield:CreateWindow({
-    Name = "Laysox UI",
-    LoadingTitle = "Laysox UI",
-    LoadingSubtitle = "Chargement...",
+    Name = "LSX V1",
+    LoadingTitle = "LSX V1",
+    LoadingSubtitle = "by Laysox",
     Theme = "Default",
     DisableRayfieldPrompts = true,
     DisableBuildWarnings = true,
@@ -675,155 +764,145 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
--- TAB SPIN
-local SpinTab = Window:CreateTab("Spin", 4483362458)
-SpinTab:CreateSlider({
-    Name = "Vitesse", Range = {1,100}, Increment = 1,
-    Suffix = "°/frame", CurrentValue = 10, Flag = "SpinSpeed",
-    Callback = function(v) spinSpeed = v end,
-})
-SpinTab:CreateDropdown({
-    Name = "Direction", Options = {"Clockwise","Counterclockwise"},
-    CurrentOption = {"Clockwise"}, Flag = "SpinDir", MultipleOptions = false,
-    Callback = function(o) spinDirection = o[1] == "Clockwise" and 1 or -1 end,
-})
-SpinTab:CreateDropdown({
-    Name = "Axe", Options = {"Y","X","Z"},
-    CurrentOption = {"Y"}, Flag = "SpinAxis", MultipleOptions = false,
-    Callback = function(o) spinAxis = o[1] end,
-})
-SpinTab:CreateToggle({
-    Name = "Activer Spin", CurrentValue = false, Flag = "SpinToggle",
-    Callback = function(v)
-        if v then startSpin(); Rayfield:Notify({ Title="Spin ON", Content="Axe : "..spinAxis, Duration=2 })
-        else stopSpin(); Rayfield:Notify({ Title="Spin OFF", Content="Arrêté.", Duration=2 }) end
-    end,
-})
+-- ========================
+-- TAB COMBAT
+-- ========================
+local CombatTab = Window:CreateTab("Combat", 4483362458)
 
--- TAB AIMBOT
-local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
-local AimbotToggleUI = AimbotTab:CreateToggle({
+CombatTab:CreateSection("Aimbot")
+local AimbotToggleUI = CombatTab:CreateToggle({
     Name = "Activer Aimbot", CurrentValue = false, Flag = "AimbotTrigger",
     Callback = function(v) Config.AimbotToggle = v end,
 })
-AimbotTab:CreateToggle({
+CombatTab:CreateToggle({
     Name = "Wall Check", CurrentValue = true, Flag = "AimbotWallCheck",
     Callback = function(v) Config.WallCheck = v end,
 })
-AimbotTab:CreateToggle({
+CombatTab:CreateToggle({
     Name = "Afficher FOV", CurrentValue = true, Flag = "AimbotShowFOV",
     Callback = function(v)
         Config.ShowFOV = v
         if DrawingCircle then DrawingCircle.Visible = v and Config.AimbotToggle end
     end,
 })
-AimbotTab:CreateSlider({
+CombatTab:CreateSlider({
     Name = "FOV", Range = {10,600}, Increment = 1,
     Suffix = " px", CurrentValue = 150, Flag = "AimbotFov",
     Callback = function(v) Config.FOV = v end,
 })
-AimbotTab:CreateSlider({
+CombatTab:CreateSlider({
     Name = "Sensibilité", Range = {0.01,1}, Increment = 0.01,
     Suffix = "", CurrentValue = 0.3, Flag = "AimbotSensitivity",
     Callback = function(v) Config.Sensitivity = v end,
 })
-AimbotTab:CreateDropdown({
-    Name = "Partie visée", Flag = "AimbotPart", MultipleOptions = false,
+CombatTab:CreateDropdown({
+    Name = "Partie visée (Aimbot)", Flag = "AimbotPart", MultipleOptions = false,
     Options = {"Head","UpperTorso","LeftUpperLeg","RightUpperLeg","LeftUpperArm","RightUpperArm"},
     CurrentOption = {"Head"},
     Callback = function(o) Config.AimbotPart = o[1] end,
 })
-
--- KEYBIND AIMBOT (stocke juste le nom de la touche)
-local allKeys = {"Q","E","R","T","F","H","J","K","L","Z","X","C","V","B","N","M",
-    "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
-    "One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Zero",
-    "LeftAlt","RightAlt","LeftShift","RightShift","Tab","CapsLock"}
-
-AimbotTab:CreateDropdown({
-    Name = "Touche Aimbot Toggle",
-    Options = allKeys,
-    CurrentOption = {"Q"},
-    Flag = "AimlockKeyDropdown",
-    MultipleOptions = false,
+CombatTab:CreateDropdown({
+    Name = "Touche Aimbot", Options = allKeys,
+    CurrentOption = {"Q"}, Flag = "AimlockKeyDD", MultipleOptions = false,
     Callback = function(o)
         aimlockKeyName = o[1]
         Rayfield:Notify({ Title="Touche Aimbot", Content="Aimbot → "..o[1], Duration=2 })
     end,
 })
-AimbotTab:CreateParagraph({
-    Title = "Comment utiliser",
-    Content = "Active l'aimbot puis maintiens CLIC DROIT pour viser.\nVise uniquement les ennemis.\nUtilise la touche configurée pour toggle.",
+
+CombatTab:CreateSection("Silent Aim")
+CombatTab:CreateToggle({
+    Name = "Activer Silent Aim", CurrentValue = false, Flag = "SilentAimToggle",
+    Callback = function(v)
+        Config.SilentAimToggle = v
+        Rayfield:Notify({
+            Title = v and "Silent Aim ON" or "Silent Aim OFF",
+            Content = v and "Tes tirs visent automatiquement." or "Désactivé.",
+            Duration = 3,
+        })
+    end,
+})
+CombatTab:CreateSlider({
+    Name = "FOV Silent Aim", Range = {10,600}, Increment = 1,
+    Suffix = " px", CurrentValue = 200, Flag = "SilentAimFOV",
+    Callback = function(v) Config.SilentAimFOV = v end,
+})
+CombatTab:CreateDropdown({
+    Name = "Partie visée (Silent Aim)", Flag = "SilentAimPart", MultipleOptions = false,
+    Options = {"Head","UpperTorso","LeftUpperLeg","RightUpperLeg","LeftUpperArm","RightUpperArm"},
+    CurrentOption = {"Head"},
+    Callback = function(o) Config.SilentAimPart = o[1] end,
+})
+CombatTab:CreateParagraph({
+    Title = "Info Silent Aim",
+    Content = "Le Silent Aim redirige tes tirs vers l'ennemi le plus proche\nsans bouger ton viseur. Requiert hookmetamethod.",
 })
 
--- TAB ESP
-local ESPTab = Window:CreateTab("ESP", 4483362458)
-local ESPToggle = ESPTab:CreateToggle({
+-- ========================
+-- TAB VISUALS (ESP)
+-- ========================
+local VisualsTab = Window:CreateTab("Visuals", 4483362458)
+
+VisualsTab:CreateSection("ESP")
+local ESPToggle = VisualsTab:CreateToggle({
     Name = "ESP", CurrentValue = false, Flag = "ESPToggle",
     Callback = function(v) Config.ShowESP = v; RefreshHighlights() end,
 })
-ESPTab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "ESP Clignotant", CurrentValue = false, Flag = "ESPBlinking",
     Callback = function(v) Config.BlinkingESP = v; RefreshHighlights() end,
 })
-ESPTab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "Noms", CurrentValue = true, Flag = "ESPShowNameTags",
     Callback = function(v) Config.ShowNameTags = v; RefreshHighlights() end,
 })
-ESPTab:CreateToggle({
+VisualsTab:CreateToggle({
     Name = "HP dans le nom", CurrentValue = true, Flag = "HPESP",
     Callback = function(v) Config.HPESP = v; RefreshHighlights() end,
 })
-ESPTab:CreateSlider({
-    Name = "Transparence", Range = {0,1}, Increment = 0.05,
+VisualsTab:CreateSlider({
+    Name = "Transparence ESP", Range = {0,1}, Increment = 0.05,
     CurrentValue = 0.3, Flag = "ESPTransparency",
     Callback = function(v) Config.ESPTransparency = v; RefreshHighlights() end,
 })
-ESPTab:CreateColorPicker({
+VisualsTab:CreateColorPicker({
     Name = "Couleur ESP",
     Color = Color3.fromRGB(255,0,0),
     Flag = "ESPEnemyColor",
     Callback = function(c) Config.EnemyColor = c; RefreshHighlights() end,
 })
-local ESPBind = ESPTab:CreateKeybind({
+local ESPBind = VisualsTab:CreateKeybind({
     Name = "Touche ESP", CurrentKeybind = "F15", Flag = "ESPBind", HoldToInteract = false,
     Callback = function() ESPToggle:Set(not Config.ShowESP) end,
 })
-ESPTab:CreateButton({ Name="Reset Touche ESP", Callback=function() ESPBind:Set("F15") end })
+VisualsTab:CreateButton({ Name="Reset Touche ESP", Callback=function() ESPBind:Set("F15") end })
 
--- TAB FLY
-local FlyTab = Window:CreateTab("Fly", 4483362458)
-FlyTab:CreateSlider({
-    Name = "Vitesse Fly", Range = {50,500}, Increment = 10,
-    Suffix = " studs/s", CurrentValue = 100, Flag = "FlySpeedSlider",
-    Callback = function(v) Config.FlySpeed = v end,
-})
-local FlyToggleUI = FlyTab:CreateToggle({
-    Name = "Activer Fly", CurrentValue = false, Flag = "FlyToggleUI",
+-- ========================
+-- TAB PLAYER
+-- ========================
+local PlayerTab = Window:CreateTab("Player", 4483362458)
+
+PlayerTab:CreateSection("Mouvement")
+local FlyToggleUI = PlayerTab:CreateToggle({
+    Name = "Fly", CurrentValue = false, Flag = "FlyToggleUI",
     Callback = function(v)
         if v then startFly() else stopFly() end
     end,
 })
-
--- KEYBIND FLY via dropdown
-FlyTab:CreateDropdown({
-    Name = "Touche Fly Toggle",
-    Options = allKeys,
-    CurrentOption = {"G"},
-    Flag = "FlyKeyDropdown",
-    MultipleOptions = false,
+PlayerTab:CreateSlider({
+    Name = "Vitesse Fly", Range = {10,2000}, Increment = 10,
+    Suffix = " studs/s", CurrentValue = 100, Flag = "FlySpeedSlider",
+    Callback = function(v) Config.FlySpeed = v end,
+})
+PlayerTab:CreateDropdown({
+    Name = "Touche Fly", Options = allKeys,
+    CurrentOption = {"G"}, Flag = "FlyKeyDD", MultipleOptions = false,
     Callback = function(o)
         flyKeyName = o[1]
         Rayfield:Notify({ Title="Touche Fly", Content="Fly → "..o[1], Duration=2 })
     end,
 })
-FlyTab:CreateParagraph({
-    Title = "Contrôles",
-    Content = "W/A/S/D → Directions\nSpace → Monter\nCtrl → Descendre\nTouche configurée → Toggle Fly",
-})
 
--- TAB PLAYER
-local PlayerTab = Window:CreateTab("Player", 4483362458)
 local WalkSpeedToggle = PlayerTab:CreateToggle({
     Name = "WalkSpeed", CurrentValue = false, Flag = "WalkSpeedToggle",
     Callback = function(v)
@@ -831,6 +910,13 @@ local WalkSpeedToggle = PlayerTab:CreateToggle({
         if v then startLoopSpeed() else stopLoopSpeed() end
     end,
 })
+PlayerTab:CreateSlider({
+    Name = "Set WalkSpeed", Range = {16,500}, Increment = 1,
+    Suffix = " studs", CurrentValue = 25.2, Flag = "WalkSpeedValue",
+    Callback = function(v) Config.WalkSpeedValue = v end,
+})
+
+PlayerTab:CreateSection("Saut")
 local JumpPowerToggle = PlayerTab:CreateToggle({
     Name = "JumpPower", CurrentValue = false, Flag = "JumpPowerToggle",
     Callback = function(v)
@@ -838,27 +924,33 @@ local JumpPowerToggle = PlayerTab:CreateToggle({
         if v then startLoopPower() else stopLoopPower() end
     end,
 })
-local NoclipToggle = PlayerTab:CreateToggle({
-    Name = "Noclip", CurrentValue = false, Flag = "NoclipToggle",
-    Callback = function(v) Config.Noclip = v end,
+PlayerTab:CreateSlider({
+    Name = "Set JumpPower", Range = {20,500}, Increment = 1,
+    Suffix = " studs", CurrentValue = 20, Flag = "JumpPowerValue",
+    Callback = function(v) Config.JumpPowerValue = v end,
 })
-local InfiniteJumpToggle = PlayerTab:CreateToggle({
+PlayerTab:CreateToggle({
     Name = "Infinite Jump", CurrentValue = false, Flag = "InfiniteJumpToggle",
     Callback = function(v)
         Config.InfiniteJump = v
         if v then startInfiniteJump() else stopInfiniteJump() end
     end,
 })
-PlayerTab:CreateSlider({
-    Name = "Set WalkSpeed", Range = {25.2,250}, Increment = 1,
-    Suffix = " studs", CurrentValue = 25.2, Flag = "WalkSpeedValue",
-    Callback = function(v) Config.WalkSpeedValue = v end,
+
+PlayerTab:CreateSection("Physique")
+local NoclipToggle = PlayerTab:CreateToggle({
+    Name = "Noclip", CurrentValue = false, Flag = "NoclipToggle",
+    Callback = function(v) Config.Noclip = v end,
 })
-PlayerTab:CreateSlider({
-    Name = "Set JumpPower", Range = {20,250}, Increment = 1,
-    Suffix = " studs", CurrentValue = 20, Flag = "JumpPowerValue",
-    Callback = function(v) Config.JumpPowerValue = v end,
+PlayerTab:CreateToggle({
+    Name = "Invisible", CurrentValue = false, Flag = "InvisToggle",
+    Callback = function(v)
+        setInvis(v)
+        Rayfield:Notify({ Title=v and "Invisible !" or "Visible", Content=v and "Personne ne te voit." or "Visible.", Duration=2 })
+    end,
 })
+
+PlayerTab:CreateSection("Keybinds")
 local WalkSpeedBind = PlayerTab:CreateKeybind({
     Name = "Touche WalkSpeed", CurrentKeybind = "F15", Flag = "WalkSpeedBind", HoldToInteract = false,
     Callback = function() WalkSpeedToggle:Set(not Config.WalkSpeed) end,
@@ -871,16 +963,13 @@ local NoclipBind = PlayerTab:CreateKeybind({
     Name = "Touche Noclip", CurrentKeybind = "F15", Flag = "NoclipBind", HoldToInteract = false,
     Callback = function() NoclipToggle:Set(not Config.Noclip) end,
 })
-local InfiniteJumpBind = PlayerTab:CreateKeybind({
-    Name = "Touche Infinite Jump", CurrentKeybind = "F15", Flag = "InfiniteJumpBind", HoldToInteract = false,
-    Callback = function() InfiniteJumpToggle:Set(not Config.InfiniteJump) end,
-})
 PlayerTab:CreateButton({ Name="Reset WalkSpeed Bind", Callback=function() WalkSpeedBind:Set("F15") end })
 PlayerTab:CreateButton({ Name="Reset JumpPower Bind", Callback=function() JumpPowerBind:Set("F15") end })
 PlayerTab:CreateButton({ Name="Reset Noclip Bind", Callback=function() NoclipBind:Set("F15") end })
-PlayerTab:CreateButton({ Name="Reset Infinite Jump Bind", Callback=function() InfiniteJumpBind:Set("F15") end })
 
--- TAB TP
+-- ========================
+-- TAB TELEPORT
+-- ========================
 local TPTab = Window:CreateTab("Téléport", 4483362458)
 local cx, cy, cz = 0, 0, 0
 
@@ -934,85 +1023,101 @@ for _, slot in pairs({"Slot 1","Slot 2","Slot 3"}) do
         Rayfield:Notify({ Title=ok and "Chargé !" or "Slot vide", Content=slot, Duration=2 }) end })
 end
 
--- TAB DIVERS
-local DiversTab = Window:CreateTab("Divers", 4483362458)
-DiversTab:CreateSection("Invisibilité")
-DiversTab:CreateToggle({ Name="Invisible", CurrentValue=false, Flag="InvisToggle",
-    Callback=function(v)
-        setInvis(v)
-        Rayfield:Notify({ Title=v and "Invisible !" or "Visible", Content=v and "Personne ne te voit." or "Tu es visible.", Duration=3 })
+-- ========================
+-- TAB MISC
+-- ========================
+local MiscTab = Window:CreateTab("Misc", 4483362458)
+
+MiscTab:CreateSection("Spin")
+MiscTab:CreateSlider({
+    Name = "Vitesse Spin", Range = {1,100}, Increment = 1,
+    Suffix = "°/frame", CurrentValue = 10, Flag = "SpinSpeed",
+    Callback = function(v) spinSpeed = v end,
+})
+MiscTab:CreateDropdown({
+    Name = "Direction", Options = {"Clockwise","Counterclockwise"},
+    CurrentOption = {"Clockwise"}, Flag = "SpinDir", MultipleOptions = false,
+    Callback = function(o) spinDirection = o[1] == "Clockwise" and 1 or -1 end,
+})
+MiscTab:CreateDropdown({
+    Name = "Axe", Options = {"Y","X","Z"},
+    CurrentOption = {"Y"}, Flag = "SpinAxis", MultipleOptions = false,
+    Callback = function(o) spinAxis = o[1] end,
+})
+MiscTab:CreateToggle({
+    Name = "Activer Spin", CurrentValue = false, Flag = "SpinToggle",
+    Callback = function(v)
+        if v then startSpin(); Rayfield:Notify({ Title="Spin ON", Content="Axe : "..spinAxis, Duration=2 })
+        else stopSpin(); Rayfield:Notify({ Title="Spin OFF", Content="Arrêté.", Duration=2 }) end
     end,
 })
-DiversTab:CreateSection("Smoke")
-DiversTab:CreateToggle({ Name="Supprimer les grenades fumigènes", CurrentValue=false, Flag="SmokeToggle",
+
+MiscTab:CreateSection("Divers")
+MiscTab:CreateToggle({ Name="Supprimer Grenades Fumigènes", CurrentValue=false, Flag="SmokeToggle",
     Callback=function(v) Config.Smoke = v end,
 })
 
--- TAB FAKE / SPOOFER
-local FakeTab = Window:CreateTab("Spoofer", 4483362458)
-
-FakeTab:CreateSection("Faux Nom")
-FakeTab:CreateToggle({
-    Name = "Activer Faux Pseudo", CurrentValue = false, Flag = "EnableFakeName",
+MiscTab:CreateSection("Spoofer")
+MiscTab:CreateToggle({
+    Name = "Faux Pseudo", CurrentValue = false, Flag = "EnableFakeName",
     Callback = function(v)
         Config.UseFakeName = v
         for _, obj in next, game:GetDescendants() do hookUIObject(obj) end
     end,
 })
-FakeTab:CreateToggle({
-    Name = "Activer Faux Display Name", CurrentValue = false, Flag = "EnableFakeDisplayName",
+MiscTab:CreateToggle({
+    Name = "Faux Display Name", CurrentValue = false, Flag = "EnableFakeDisplayName",
     Callback = function(v)
         Config.UseFakeDisplayName = v
         for _, obj in next, game:GetDescendants() do hookUIObject(obj) end
     end,
 })
-FakeTab:CreateInput({
+MiscTab:CreateInput({
     Name = "Pseudo", PlaceholderText = "Faux pseudo", RemoveTextAfterFocusLost = false,
     Callback = function(v)
         Config.FakeName = v
         if Config.UseFakeName then pcall(function() player.Name = v end) end
     end,
 })
-FakeTab:CreateInput({
+MiscTab:CreateInput({
     Name = "Display Name", PlaceholderText = "Faux display name", RemoveTextAfterFocusLost = false,
     Callback = function(v)
         Config.FakeDisplayName = v
         if Config.UseFakeDisplayName then pcall(function() player.DisplayName = v end) end
     end,
 })
-
-FakeTab:CreateSection("Device Spoofer")
-FakeTab:CreateDropdown({
-    Name = "Simuler un appareil",
-    Options = {"PC (MouseKeyboard)", "Mobile (Touch)", "Console (Gamepad)"},
+MiscTab:CreateDropdown({
+    Name = "Device Spoofer",
+    Options = {"PC (MouseKeyboard)","Mobile (Touch)","Console (Gamepad)"},
     CurrentOption = {"PC (MouseKeyboard)"},
-    Flag = "DeviceSpoofer",
-    MultipleOptions = false,
+    Flag = "DeviceSpoofer", MultipleOptions = false,
     Callback = function(o)
-        local deviceMap = {
+        local map = {
             ["PC (MouseKeyboard)"] = "MouseKeyboard",
             ["Mobile (Touch)"] = "Touch",
             ["Console (Gamepad)"] = "Gamepad",
         }
-        local deviceType = deviceMap[o[1]]
-        if deviceType then
+        local dt = map[o[1]]
+        if dt then
             pcall(function()
                 game:GetService("ReplicatedStorage")
                     :WaitForChild("Remotes")
                     :WaitForChild("Replication")
                     :WaitForChild("Fighter")
                     :WaitForChild("SetControls")
-                    :FireServer(deviceType)
+                    :FireServer(dt)
             end)
-            Rayfield:Notify({ Title="Device Spoofer", Content="Appareil → "..o[1], Duration=3 })
+            Rayfield:Notify({ Title="Device Spoofer", Content="→ "..o[1], Duration=3 })
         end
     end,
 })
 
+-- ========================
 -- TAB IMPORTANT
+-- ========================
 local ImportantTab = Window:CreateTab("Important", 4483362458)
 ImportantTab:CreateButton({
-    Name = "FERMER LE CHEAT",
+    Name = "FERMER LSX V1",
     Callback = function()
         Config.AimbotToggle = false
         Config.ShowESP = false
@@ -1022,6 +1127,7 @@ ImportantTab:CreateButton({
         Config.InfiniteJump = false
         Config.Fly = false
         Config.Smoke = false
+        Config.SilentAimToggle = false
         stopFly()
         stopLoopSpeed()
         stopLoopPower()
@@ -1040,6 +1146,6 @@ ImportantTab:CreateButton({
 ImportantTab:CreateButton({
     Name = "RAGE QUIT",
     Callback = function()
-        player:Kick("Rage quit lol")
+        player:Kick("LSX V1 — Rage quit")
     end,
 })
