@@ -27,7 +27,6 @@ if not Rayfield then return end
 
 -- CONFIG
 local Config = {
-    -- Aimbot
     AimbotToggle = false,
     AimbotPart = "Head",
     RightMouseDown = false,
@@ -36,18 +35,15 @@ local Config = {
     LockOnTarget = nil,
     ShowFOV = true,
     WallCheck = true,
-    -- Silent Aim
     SilentAimToggle = false,
     SilentAimPart = "Head",
     SilentAimFOV = 200,
-    -- ESP
     ShowESP = false,
     EnemyColor = Color3.fromRGB(255, 0, 0),
     BlinkingESP = false,
     HPESP = true,
     ESPTransparency = 0.3,
     ShowNameTags = true,
-    -- Player
     WalkSpeed = false,
     WalkSpeedValue = 25.2,
     JumpPower = false,
@@ -57,7 +53,6 @@ local Config = {
     Fly = false,
     FlySpeed = 100,
     Smoke = false,
-    -- Fake
     UseFakeName = false,
     UseFakeDisplayName = false,
     FakeName = "",
@@ -89,6 +84,13 @@ local selectedPlayer = ""
 
 local aimlockKeyName = "Q"
 local flyKeyName = "G"
+
+local allKeys = {
+    "Q","E","R","T","F","G","H","J","K","L","Z","X","C","V","B","N","M",
+    "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
+    "One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Zero",
+    "LeftAlt","RightAlt","LeftShift","RightShift","Tab","CapsLock"
+}
 
 -- UPDATE PERSO
 local function refresh()
@@ -270,7 +272,8 @@ local function setInvis(state)
             if h then
                 if state then
                     originalTransparency[h] = h.Transparency
-                    h.Transparency = 1; h.LocalTransparencyModifier = 1
+                    h.Transparency = 1
+                    h.LocalTransparencyModifier = 1
                 else
                     h.Transparency = originalTransparency[h] or 0
                     h.LocalTransparencyModifier = 0
@@ -409,98 +412,14 @@ end
 for _, v in next, game:GetDescendants() do hookUIObject(v) end
 game.DescendantAdded:Connect(hookUIObject)
 
--- ========================
--- SILENT AIM
--- ========================
-local silentAimConnection = nil
-
-local function getSilentAimTarget()
-    local closest, minDist = nil, Config.SilentAimFOV
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    for _, p in pairs(Players:GetPlayers()) do
-        if isEnemy(p) and p.Character then
-            local part = p.Character:FindFirstChild(Config.SilentAimPart)
-            if part then
-                local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
-                if onScreen then
-                    local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
-                    if dist < minDist then
-                        minDist = dist
-                        closest = p
-                    end
-                end
-            end
-        end
-    end
-    return closest
-end
-
-local function startSilentAim()
-    if silentAimConnection then return end
-    -- Hook sur le raycast de la souris pour rediriger les tirs
-    local oldNamecall
-    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local args = {...}
-        local method = getnamecallmethod()
-
-        if Config.SilentAimToggle and method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
-            local target = getSilentAimTarget()
-            if target and target.Character then
-                local part = target.Character:FindFirstChild(Config.SilentAimPart)
-                if part then
-                    if args[1] and typeof(args[1]) == "Ray" then
-                        args[1] = Ray.new(args[1].Origin, (part.Position - args[1].Origin).Unit * args[1].Direction.Magnitude)
-                    end
-                end
-            end
-        end
-
-        return oldNamecall(self, table.unpack(args))
-    end)
-end
-
-local function startSilentAimV2()
-    -- Version alternative via WorldRoot:Raycast
-    if silentAimConnection then return end
-    local oldNamecall
-    if hookmetamethod then
-        pcall(function()
-            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-                local method = getnamecallmethod()
-                local args = {...}
-
-                if Config.SilentAimToggle then
-                    if method == "Raycast" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRay" then
-                        local target = getSilentAimTarget()
-                        if target and target.Character then
-                            local part = target.Character:FindFirstChild(Config.SilentAimPart)
-                            if part and args[1] and args[2] then
-                                if typeof(args[2]) == "Vector3" then
-                                    args[2] = (part.Position - args[1]).Unit * args[2].Magnitude
-                                elseif typeof(args[1]) == "Ray" then
-                                    args[1] = Ray.new(args[1].Origin, (part.Position - args[1].Origin).Unit * args[1].Direction.Magnitude)
-                                end
-                            end
-                        end
-                    end
-                end
-
-                return oldNamecall(self, table.unpack(args))
-            end)
-        end)
-    end
-end
-
--- ========================
--- AIMBOT (Rivals style)
--- ========================
+-- AIMBOT
 if Drawing then
     DrawingCircle = Drawing.new("Circle")
     DrawingCircle.Thickness = 1
     DrawingCircle.Filled = false
     DrawingCircle.Transparency = 1
     DrawingCircle.Color = Color3.fromRGB(255, 255, 255)
-    DrawingCircle.Visible = Config.ShowFOV
+    DrawingCircle.Visible = false
     DrawingCircle.Radius = Config.FOV
     table.insert(connections, RunService.RenderStepped:Connect(function()
         DrawingCircle.Position = Vector2.new(Mouse.X, Mouse.Y + 36)
@@ -569,10 +488,53 @@ local function isLockedTargetValid()
     return true
 end
 
+-- SILENT AIM (safe — redirige la caméra sans hookmetamethod)
+local function getSilentAimTarget()
+    local closest, minDist = nil, Config.SilentAimFOV
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    for _, p in pairs(Players:GetPlayers()) do
+        if isEnemy(p) and p.Character then
+            local part = p.Character:FindFirstChild(Config.SilentAimPart)
+            if part then
+                local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        closest = p
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- Silent Aim via CFrame camera redirect au moment du clic
 table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
+
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         Config.RightMouseDown = true
+    end
+
+    -- Silent Aim : au moment du clic gauche, pointe la caméra vers la cible
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if Config.SilentAimToggle then
+            local target = getSilentAimTarget()
+            if target and target.Character then
+                local part = target.Character:FindFirstChild(Config.SilentAimPart)
+                if part then
+                    local originalCF = Camera.CFrame
+                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, part.Position)
+                    task.delay(0.07, function()
+                        if Camera then
+                            Camera.CFrame = originalCF
+                        end
+                    end)
+                end
+            end
+        end
     end
 end))
 
@@ -583,6 +545,7 @@ table.insert(connections, UserInputService.InputEnded:Connect(function(input)
     end
 end))
 
+-- Aimbot loop
 table.insert(connections, RunService.RenderStepped:Connect(function()
     if not Config.AimbotToggle or not Config.RightMouseDown then return end
     if Config.LockOnTarget and isLockedTargetValid() then
@@ -715,13 +678,6 @@ task.spawn(function()
 end)
 
 -- KEYBINDS GLOBAUX
-local allKeys = {
-    "Q","E","R","T","F","G","H","J","K","L","Z","X","C","V","B","N","M",
-    "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
-    "One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Zero",
-    "LeftAlt","RightAlt","LeftShift","RightShift","Tab","CapsLock"
-}
-
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
@@ -747,9 +703,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
--- Initialise Silent Aim
-pcall(startSilentAimV2)
-
 -- ========================
 -- UI — LSX V1
 -- ========================
@@ -764,9 +717,7 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
--- ========================
 -- TAB COMBAT
--- ========================
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 
 CombatTab:CreateSection("Aimbot")
@@ -817,7 +768,7 @@ CombatTab:CreateToggle({
         Config.SilentAimToggle = v
         Rayfield:Notify({
             Title = v and "Silent Aim ON" or "Silent Aim OFF",
-            Content = v and "Tes tirs visent automatiquement." or "Désactivé.",
+            Content = v and "Tes tirs visent l'ennemi le plus proche." or "Désactivé.",
             Duration = 3,
         })
     end,
@@ -835,12 +786,10 @@ CombatTab:CreateDropdown({
 })
 CombatTab:CreateParagraph({
     Title = "Info Silent Aim",
-    Content = "Le Silent Aim redirige tes tirs vers l'ennemi le plus proche\nsans bouger ton viseur. Requiert hookmetamethod.",
+    Content = "Au moment du clic gauche, la caméra se redirige\nvers l'ennemi le plus proche pendant 70ms.\nSafe — aucun hookmetamethod utilisé.",
 })
 
--- ========================
--- TAB VISUALS (ESP)
--- ========================
+-- TAB VISUALS
 local VisualsTab = Window:CreateTab("Visuals", 4483362458)
 
 VisualsTab:CreateSection("ESP")
@@ -877,9 +826,7 @@ local ESPBind = VisualsTab:CreateKeybind({
 })
 VisualsTab:CreateButton({ Name="Reset Touche ESP", Callback=function() ESPBind:Set("F15") end })
 
--- ========================
 -- TAB PLAYER
--- ========================
 local PlayerTab = Window:CreateTab("Player", 4483362458)
 
 PlayerTab:CreateSection("Mouvement")
@@ -902,7 +849,6 @@ PlayerTab:CreateDropdown({
         Rayfield:Notify({ Title="Touche Fly", Content="Fly → "..o[1], Duration=2 })
     end,
 })
-
 local WalkSpeedToggle = PlayerTab:CreateToggle({
     Name = "WalkSpeed", CurrentValue = false, Flag = "WalkSpeedToggle",
     Callback = function(v)
@@ -946,7 +892,11 @@ PlayerTab:CreateToggle({
     Name = "Invisible", CurrentValue = false, Flag = "InvisToggle",
     Callback = function(v)
         setInvis(v)
-        Rayfield:Notify({ Title=v and "Invisible !" or "Visible", Content=v and "Personne ne te voit." or "Visible.", Duration=2 })
+        Rayfield:Notify({
+            Title = v and "Invisible !" or "Visible",
+            Content = v and "Personne ne te voit." or "Tu es visible.",
+            Duration = 2,
+        })
     end,
 })
 
@@ -967,9 +917,7 @@ PlayerTab:CreateButton({ Name="Reset WalkSpeed Bind", Callback=function() WalkSp
 PlayerTab:CreateButton({ Name="Reset JumpPower Bind", Callback=function() JumpPowerBind:Set("F15") end })
 PlayerTab:CreateButton({ Name="Reset Noclip Bind", Callback=function() NoclipBind:Set("F15") end })
 
--- ========================
 -- TAB TELEPORT
--- ========================
 local TPTab = Window:CreateTab("Téléport", 4483362458)
 local cx, cy, cz = 0, 0, 0
 
@@ -1023,9 +971,7 @@ for _, slot in pairs({"Slot 1","Slot 2","Slot 3"}) do
         Rayfield:Notify({ Title=ok and "Chargé !" or "Slot vide", Content=slot, Duration=2 }) end })
 end
 
--- ========================
 -- TAB MISC
--- ========================
 local MiscTab = Window:CreateTab("Misc", 4483362458)
 
 MiscTab:CreateSection("Spin")
@@ -1112,9 +1058,7 @@ MiscTab:CreateDropdown({
     end,
 })
 
--- ========================
 -- TAB IMPORTANT
--- ========================
 local ImportantTab = Window:CreateTab("Important", 4483362458)
 ImportantTab:CreateButton({
     Name = "FERMER LSX V1",
@@ -1136,7 +1080,9 @@ ImportantTab:CreateButton({
         local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
         if h then h.WalkSpeed = 25.2; h.JumpPower = 20 end
         for _, conn in ipairs(connections) do
-            if typeof(conn) == "RBXScriptConnection" then pcall(function() conn:Disconnect() end) end
+            if typeof(conn) == "RBXScriptConnection" then
+                pcall(function() conn:Disconnect() end)
+            end
         end
         if DrawingCircle then DrawingCircle:Remove(); DrawingCircle = nil end
         if InfiniteJumpConnection then InfiniteJumpConnection:Disconnect(); InfiniteJumpConnection = nil end
