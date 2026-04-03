@@ -1,4 +1,4 @@
--- LSX V1
+-- LSX V1 (Optimisé & Anti-Crash)
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS        = game:GetService("UserInputService")
@@ -28,11 +28,10 @@ local Cfg = {
     Spin=false, SpinSpd=10, SpinDir=1, SpinAxis="Y",
 }
 
-local HMC={}, noclipP={}, origTrans={}
+local origTrans={}
 local IJConn,FlyConn,SpinConn=nil,nil,nil
 local AimKey="Q"; local FlyKey="G"; local SAKey="F"
 
--- Fonctions déclarées avant Rayfield
 local function refresh()
     character=lp.Character; if not character then return end
     hrp=character:FindFirstChild("HumanoidRootPart")
@@ -45,31 +44,29 @@ local function isEnemy(p)
     return true
 end
 
-local function startWS()
-    local h=lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
-    if not h then return end
-    local function apply() h.WalkSpeed=Cfg.WSVal end; apply()
-    if HMC.ws then HMC.ws:Disconnect() end
-    HMC.ws=h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
-end
-local function stopWS()
-    if HMC.ws then HMC.ws:Disconnect(); HMC.ws=nil end
-    local h=lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
-    if h then h.WalkSpeed=25.2 end
-end
+-- ===========================
+-- MOUVEMENTS CENTRALISÉS (Anti-Crash)
+-- ===========================
+RunService.Stepped:Connect(function()
+    local c = lp.Character
+    if not c then return end
+    local h = c:FindFirstChildWhichIsA("Humanoid")
+    
+    -- WalkSpeed & JumpPower
+    if h then
+        if Cfg.WS then h.WalkSpeed = Cfg.WSVal end
+        if Cfg.JP then h.UseJumpPower = true; h.JumpPower = Cfg.JPVal end
+    end
 
-local function startJP()
-    local h=lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
-    if not h then return end
-    local function apply() h.UseJumpPower=true; h.JumpPower=Cfg.JPVal end; apply()
-    if HMC.jp then HMC.jp:Disconnect() end
-    HMC.jp=h:GetPropertyChangedSignal("JumpPower"):Connect(apply)
-end
-local function stopJP()
-    if HMC.jp then HMC.jp:Disconnect(); HMC.jp=nil end
-    local h=lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
-    if h then h.JumpPower=20 end
-end
+    -- Noclip optimisé (Pas de fuite de mémoire)
+    if Cfg.Noclip then
+        for _, p in ipairs(c:GetDescendants()) do
+            if p:IsA("BasePart") and p.CanCollide then
+                p.CanCollide = false
+            end
+        end
+    end
+end)
 
 local function startIJ()
     if IJConn then return end
@@ -100,6 +97,7 @@ local function startFly()
     local vel=Instance.new("BodyVelocity"); vel.Name="FV"
     vel.MaxForce=Vector3.new(1,1,1)*math.huge
     vel.P=10000; vel.Velocity=Vector3.zero; vel.Parent=h
+    
     if FlyConn then FlyConn:Disconnect() end
     FlyConn=RunService.RenderStepped:Connect(function()
         if not Cfg.Fly or not h or not h.Parent then
@@ -182,6 +180,9 @@ local function setInvis(state)
     end
 end
 
+-- ===========================
+-- ESP OPTIMISÉ
+-- ===========================
 local function clearESP()
     for _,p in ipairs(Players:GetPlayers()) do
         if p.Character then
@@ -197,7 +198,9 @@ local function refreshESP()
             local c=p.Character
             local ehl=c:FindFirstChild("EH")
             local ebb=c:FindFirstChild("EB")
+            
             if Cfg.ESP then
+                -- Highlight
                 if not ehl then
                     local hl=Instance.new("Highlight"); hl.Name="EH"
                     hl.FillTransparency=Cfg.ESPTrans
@@ -207,28 +210,32 @@ local function refreshESP()
                     ehl.FillColor=Cfg.ESPColor
                     ehl.FillTransparency=Cfg.ESPTrans
                 end
-                if Cfg.ESPNames and not ebb then
-                    local head=c:FindFirstChild("Head")
-                    if head then
+                
+                -- Noms & HP
+                local head=c:FindFirstChild("Head")
+                if Cfg.ESPNames and head then
+                    if not ebb then
                         local bb=Instance.new("BillboardGui"); bb.Name="EB"
                         bb.Adornee=head; bb.Size=UDim2.new(0,100,0,20)
                         bb.StudsOffset=Vector3.new(0,2.5,0); bb.AlwaysOnTop=true
                         local lbl=Instance.new("TextLabel",bb)
-                        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1
-                        lbl.TextColor3=Cfg.ESPColor; lbl.TextScaled=true
+                        lbl.Name="LBL"; lbl.Size=UDim2.new(1,0,1,0)
+                        lbl.BackgroundTransparency=1; lbl.TextScaled=true
                         lbl.Font=Enum.Font.SourceSansBold
-                        if Cfg.ESPHP then
-                            task.spawn(function()
-                                while lbl and lbl.Parent and Cfg.ESP do
-                                    sc(function()
-                                        lbl.Text=p.Name.." | "..math.floor(p.Character.Humanoid.Health).." HP"
-                                    end)
-                                    task.wait(0.3)
-                                end
-                            end)
-                        else lbl.Text=p.Name end
                         bb.Parent=c
+                        ebb=bb
                     end
+                    local lbl = ebb:FindFirstChild("LBL")
+                    if lbl then
+                        lbl.TextColor3=Cfg.ESPColor
+                        if Cfg.ESPHP and c:FindFirstChild("Humanoid") then
+                            lbl.Text=p.Name.." | "..math.floor(c.Humanoid.Health).." HP"
+                        else
+                            lbl.Text=p.Name
+                        end
+                    end
+                elseif not Cfg.ESPNames and ebb then
+                    ebb:Destroy()
                 end
             else
                 if ehl then ehl:Destroy() end
@@ -238,22 +245,6 @@ local function refreshESP()
     end
 end
 
--- Boucles légères
-task.spawn(function()
-    while task.wait(0.25) do
-        local c=lp.Character; if not c then continue end
-        for _,p in ipairs(c:GetDescendants()) do
-            if p:IsA("BasePart") then
-                if Cfg.Noclip then
-                    if p.CanCollide then p.CanCollide=false; noclipP[p]=true end
-                else
-                    if noclipP[p] then p.CanCollide=true; noclipP[p]=nil end
-                end
-            end
-        end
-    end
-end)
-
 task.spawn(function()
     while task.wait(0.4) do
         if Cfg.Smoke then
@@ -261,21 +252,11 @@ task.spawn(function()
                 if v.Name=="Smoke Grenade" then sc(function() v:Destroy() end) end
             end
         end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(0.3) do
         if Cfg.ESP then refreshESP() else clearESP() end
     end
 end)
 
 -- Auto respawn
-humanoid.Died:Connect(function()
-    if not Cfg.AutoRespawn then return end
-    task.wait(0.3); sc(function() lp:LoadCharacter() end)
-end)
-
 lp.CharacterAdded:Connect(function()
     task.wait(1); refresh()
     if humanoid then
@@ -286,7 +267,16 @@ lp.CharacterAdded:Connect(function()
     end
 end)
 
--- Aimbot
+if humanoid then
+    humanoid.Died:Connect(function()
+        if not Cfg.AutoRespawn then return end
+        task.wait(0.3); sc(function() lp:LoadCharacter() end)
+    end)
+end
+
+-- ===========================
+-- AIMBOT & SILENT AIM
+-- ===========================
 local function isValidTarget(p)
     if p==lp then return false end
     if not p.Character then return false end
@@ -374,7 +364,9 @@ RunService.RenderStepped:Connect(function()
             local pos=Camera:WorldToScreenPoint(part.Position)
             if pos.Z>0 then
                 local delta=(Vector2.new(pos.X,pos.Y)-Vector2.new(Mouse.X,Mouse.Y))*Cfg.AimSens
-                sc(function() mousemoverel(delta.X,delta.Y) end)
+                if delta.X == delta.X and delta.Y == delta.Y then -- Sécurité Anti-NaN pour mousemoverel
+                    sc(function() mousemoverel(delta.X,delta.Y) end)
+                end
             end
         end
     else
@@ -447,9 +439,21 @@ MiscTab:CreateToggle({Name="Invisible",CurrentValue=false,Flag="IV",Callback=fun
 MiscTab:CreateToggle({Name="Auto Respawn",CurrentValue=false,Flag="AR",Callback=function(v) Cfg.AutoRespawn=v end})
 
 MiscTab:CreateSection("Character")
-MiscTab:CreateToggle({Name="WalkSpeed",CurrentValue=false,Flag="WS",Callback=function(v) Cfg.WS=v; if v then startWS() else stopWS() end end})
+MiscTab:CreateToggle({Name="WalkSpeed",CurrentValue=false,Flag="WS",Callback=function(v) 
+    Cfg.WS=v 
+    if not v and lp.Character then 
+        local h = lp.Character:FindFirstChildWhichIsA("Humanoid")
+        if h then h.WalkSpeed = 16 end
+    end
+end})
 MiscTab:CreateSlider({Name="Set WalkSpeed",Range={16,500},Increment=1,Suffix=" studs",CurrentValue=25,Flag="WSV",Callback=function(v) Cfg.WSVal=v end})
-MiscTab:CreateToggle({Name="JumpPower",CurrentValue=false,Flag="JP",Callback=function(v) Cfg.JP=v; if v then startJP() else stopJP() end end})
+MiscTab:CreateToggle({Name="JumpPower",CurrentValue=false,Flag="JP",Callback=function(v) 
+    Cfg.JP=v 
+    if not v and lp.Character then 
+        local h = lp.Character:FindFirstChildWhichIsA("Humanoid")
+        if h then h.JumpPower = 50 end
+    end
+end})
 MiscTab:CreateSlider({Name="Set JumpPower",Range={20,500},Increment=1,Suffix=" studs",CurrentValue=20,Flag="JPV",Callback=function(v) Cfg.JPVal=v end})
 
 MiscTab:CreateSection("World")
@@ -460,11 +464,10 @@ SettTab:CreateSection("Actions")
 SettTab:CreateButton({Name="FERMER LSX V1",Callback=function()
     Cfg.Aim=false; Cfg.SA=false; Cfg.ESP=false; Cfg.Noclip=false
     Cfg.WS=false; Cfg.JP=false; Cfg.IJ=false; Cfg.Fly=false; Cfg.Smoke=false
-    sc(function() stopFly() end); sc(function() stopWS() end)
-    sc(function() stopJP() end); sc(function() stopIJ() end)
+    sc(function() stopFly() end); sc(function() stopIJ() end)
     sc(function() stopSpin() end); sc(function() clearESP() end)
     local h=lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
-    if h then h.WalkSpeed=25.2; h.JumpPower=20 end
+    if h then h.WalkSpeed=16; h.JumpPower=50 end
     UIS.MouseBehavior=Enum.MouseBehavior.Default
     Rayfield:Destroy()
 end})
