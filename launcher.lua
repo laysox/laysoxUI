@@ -3,7 +3,7 @@ task.wait(2)
 
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local UIS        = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 repeat task.wait(0.5) until player.Character
@@ -14,15 +14,12 @@ local Camera = workspace.CurrentCamera
 
 local function sc(f,...) pcall(f,...) end
 
--- VARIABLES UNIVERSEL
 local flySpeed = 100
 local flyActive = false
 local flyKeyName = "G"
 local noclip = false
-local noclippedParts = {}
 local wsActive = false
 local wsValue = 50
-local ijActive = false
 local ijConnection = nil
 local HumanModCons = {}
 
@@ -37,7 +34,6 @@ player.CharacterAdded:Connect(function()
     flyActive = false; noclip = false; wsActive = false
 end)
 
--- FLY
 local function startFly()
     if flyActive then return end
     flyActive = true
@@ -60,14 +56,14 @@ local function startFly()
             sc(function() gyro:Destroy() end); sc(function() vel:Destroy() end)
             return
         end
-        local move = Vector3.zero; local cf = Camera.CFrame
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + cf.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - cf.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - cf.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + cf.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0,1,0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0,1,0) end
-        vel.Velocity = move.Magnitude > 0 and move.Unit * flySpeed or Vector3.zero
+        local mv = Vector3.zero; local cf = Camera.CFrame
+        if UIS:IsKeyDown(Enum.KeyCode.W) then mv = mv + cf.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then mv = mv - cf.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then mv = mv - cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then mv = mv + cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then mv = mv - Vector3.new(0,1,0) end
+        vel.Velocity = mv.Magnitude > 0 and mv.Unit * flySpeed or Vector3.zero
         gyro.CFrame = Camera.CFrame
     end)
 end
@@ -83,18 +79,16 @@ local function stopFly()
     end
 end
 
--- NOCLIP
 task.spawn(function()
     while task.wait(0.25) do
         if not noclip then continue end
-        local char = player.Character; if not char then continue end
-        for _, part in pairs(char:GetDescendants()) do
+        local c = player.Character; if not c then continue end
+        for _, part in pairs(c:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
 end)
 
--- WALKSPEED
 local function startWS()
     local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
     if not h then return end
@@ -108,13 +102,13 @@ local function stopWS()
     if h then h.WalkSpeed = 16 end
 end
 
--- INFINITE JUMP
 local function startIJ()
     if ijConnection then return end
-    ijConnection = UserInputService.JumpRequest:Connect(function()
-        local char = player.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    ijConnection = UIS.JumpRequest:Connect(function()
+        local c = player.Character
+        if c then
+            local h = c:FindFirstChildWhichIsA("Humanoid")
+            if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
         end
     end)
 end
@@ -122,8 +116,7 @@ local function stopIJ()
     if ijConnection then ijConnection:Disconnect(); ijConnection = nil end
 end
 
--- FLY KEY GLOBAL
-UserInputService.InputBegan:Connect(function(input, gp)
+UIS.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
     if input.KeyCode.Name == flyKeyName then
@@ -131,9 +124,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
--- ========================
 -- RAYFIELD
--- ========================
 local Rayfield
 sc(function()
     Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -157,9 +148,7 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
--- ========================
 -- TAB UNIVERSEL
--- ========================
 local UniTab = Window:CreateTab("Universel", 4483362458)
 
 UniTab:CreateSection("Fly")
@@ -168,7 +157,7 @@ UniTab:CreateSlider({
     Suffix = " studs/s", CurrentValue = 100, Flag = "UniFlySpeed",
     Callback = function(v) flySpeed = v end,
 })
-local FlyToggleUI = UniTab:CreateToggle({
+UniTab:CreateToggle({
     Name = "Activer Fly", CurrentValue = false, Flag = "UniFlyToggle",
     Callback = function(v)
         if v then startFly(); Rayfield:Notify({Title="Fly ON", Content=flySpeed.." studs/s", Duration=2})
@@ -176,15 +165,12 @@ local FlyToggleUI = UniTab:CreateToggle({
     end,
 })
 UniTab:CreateDropdown({
-    Name = "Touche Fly", Options = {
-        "G","Q","E","R","T","F","H","J","K","L","Z","X","C","V","B","N","M",
-        "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
-        "LeftAlt","RightAlt","LeftShift","RightShift","Tab"
-    },
+    Name = "Touche Fly",
+    Options = {"G","Q","E","R","T","F","H","J","K","L","Z","X","C","V","B","N","M","F1","F2","F3","F4","F5","F6","LeftShift","LeftAlt","Tab"},
     CurrentOption = {"G"}, Flag = "UniFlyKey", MultipleOptions = false,
     Callback = function(o)
         flyKeyName = o[1]
-        Rayfield:Notify({Title="Touche Fly", Content="Fly touche -> "..o[1], Duration=2})
+        Rayfield:Notify({Title="Touche Fly", Content="Fly -> "..o[1], Duration=2})
     end,
 })
 UniTab:CreateParagraph({
@@ -194,7 +180,7 @@ UniTab:CreateParagraph({
 
 UniTab:CreateSection("Noclip")
 UniTab:CreateToggle({
-    Name = "Noclip (traverser les murs)", CurrentValue = false, Flag = "UniNoclip",
+    Name = "Noclip", CurrentValue = false, Flag = "UniNoclip",
     Callback = function(v)
         noclip = v
         Rayfield:Notify({Title=v and "Noclip ON" or "Noclip OFF",
@@ -241,39 +227,31 @@ UniTab:CreateButton({Name="Teleporter", Callback=function()
     end
 end})
 
--- ========================
 -- TAB JEUX
--- ========================
 local GamesTab = Window:CreateTab("Jeux", 4483362458)
+
+-- Place ID récupéré depuis la capture d'écran
+local currentPlaceId = game.PlaceId
 
 local games = {
     {
         name = "Carpet Cleaning Simulator",
         placeId = 124374448373637,
         script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
-        description = "Auto job, XP farm, vitesse, tp..."
+        description = "Auto job, XP farm, vitesse, tp...",
     },
-    -- Ajoute tes futurs jeux ici :
-    -- {
-    --     name = "Nom du jeu",
-    --     placeId = 123456789,
-    --     script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/nomdujeu.lua",
-    --     description = "Description du script"
-    -- },
 }
 
 GamesTab:CreateParagraph({
     Title = "Laysox Launcher - Jeux",
-    Content = "Clique sur un jeu pour charger son script.\nTu dois etre dans le bon jeu.",
+    Content = "Clique sur un jeu pour charger son script.\nPlace ID actuel : "..tostring(currentPlaceId),
 })
 
 GamesTab:CreateSection("Scripts disponibles")
 
-local currentPlaceId = game.PlaceId
-
 for _, gameInfo in pairs(games) do
     local isCurrentGame = currentPlaceId == gameInfo.placeId
-    local status = isCurrentGame and " [OK]" or " [PAS CE JEU]"
+    local status = isCurrentGame and " [OK - Tu es ici]" or " [Pas ce jeu]"
 
     GamesTab:CreateButton({
         Name = gameInfo.name..status,
@@ -281,14 +259,14 @@ for _, gameInfo in pairs(games) do
             if not isCurrentGame then
                 Rayfield:Notify({
                     Title = "Mauvais jeu!",
-                    Content = "Tu dois etre dans "..gameInfo.name.." pour ce script.\nPlace ID actuel : "..tostring(currentPlaceId),
-                    Duration = 5,
+                    Content = "Place ID du jeu : "..tostring(gameInfo.placeId).."\nTon Place ID actuel : "..tostring(currentPlaceId),
+                    Duration = 6,
                 })
                 return
             end
             Rayfield:Notify({
                 Title = "Chargement...",
-                Content = "Script "..gameInfo.name.." en cours...",
+                Content = "Chargement de "..gameInfo.name.."...",
                 Duration = 3,
             })
             task.wait(1)
@@ -302,31 +280,25 @@ for _, gameInfo in pairs(games) do
 
     GamesTab:CreateParagraph({
         Title = gameInfo.name,
-        Content = gameInfo.description.."\nPlace ID : "..tostring(gameInfo.placeId),
+        Content = gameInfo.description.."\nPlace ID attendu : "..tostring(gameInfo.placeId),
     })
 end
 
-GamesTab:CreateSection("Jeu actuel")
+GamesTab:CreateSection("Debug - Jeu actuel")
 GamesTab:CreateParagraph({
-    Title = "Place ID",
-    Content = "Tu es sur le jeu ID : "..tostring(currentPlaceId),
+    Title = "Ton Place ID",
+    Content = tostring(currentPlaceId).."\n\nSi le bouton dit [Pas ce jeu] meme si tu es dans le bon jeu, copie ce Place ID et dis le moi pour corriger.",
 })
 
--- ========================
 -- TAB INFOS
--- ========================
 local InfoTab = Window:CreateTab("Infos", 4483362458)
 InfoTab:CreateParagraph({
-    Title = "Comment utiliser le Launcher",
-    Content = "1. L'onglet Universel fonctionne dans TOUS les jeux\n2. Va dans l'onglet Jeux pour charger un script specifique\n3. Clique sur le jeu dans lequel tu es ([OK])\n4. Le script se charge et remplace le launcher",
+    Title = "Comment utiliser",
+    Content = "1. Onglet Universel : fonctionne partout\n2. Onglet Jeux : charge un script pour un jeu\n3. Tu dois etre dans le bon jeu\n4. Si [Pas ce jeu] : note ton Place ID dans Debug",
 })
 InfoTab:CreateParagraph({
     Title = "Scripts disponibles",
     Content = "Carpet Cleaning Simulator - Auto job, XP farm...",
-})
-InfoTab:CreateParagraph({
-    Title = "Universel - Fonctions",
-    Content = "Fly (touche configurable)\nNoclip\nWalkSpeed\nInfinite Jump\nTeleport rapide",
 })
 InfoTab:CreateButton({
     Name = "Rejoindre le Discord LSX",
