@@ -128,7 +128,9 @@ UIS.InputBegan:Connect(function(input, gp)
     end
 end)
 
--- RAYFIELD
+-- ========================
+-- RAYFIELD (launcher only)
+-- ========================
 local Rayfield
 sc(function()
     Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -182,7 +184,7 @@ UniTab:CreateDropdown({
 })
 UniTab:CreateParagraph({
     Title = "Controles Fly",
-    Content = "W/A/S/D -> Directions\nSpace -> Monter\nCtrl -> Descendre\nTouche configuree -> Toggle",
+    Content = "W/A/S/D -> Directions | Space -> Monter | Ctrl -> Descendre",
 })
 
 UniTab:CreateSection("Noclip")
@@ -242,109 +244,91 @@ local GamesTab = Window:CreateTab("Jeux", 4483362458)
 
 local currentPlaceId = game.PlaceId
 
--- ⚠️ CONFIGURATION DES JEUX
--- dispo = true  → script disponible (apparait dans "Scripts disponibles")
--- dispo = false → pas de script (apparait dans "Scripts non disponibles")
-
+-- Configuration des jeux
+-- dispo = true  -> script dispo
+-- dispo = false -> pas de script
 local games = {
     {
-        name = "Carpet Cleaning Simulator",
+        name    = "Carpet Cleaning Simulator",
         placeId = 124374448373637,
-        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
-        description = "Auto job, XP farm, vitesse, tp...",
-        dispo = true,
+        script  = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
+        dispo   = true,
     },
     {
-        name = "Build A Boat For Treasure",
+        name    = "Build A Boat For Treasure",
         placeId = 537413528,
-        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/BuildABoat.lua",
-        description = "Auto farm, speed, fly...",
-        dispo = true,
+        script  = "https://raw.githubusercontent.com/laysox/laysoxUI/main/BuildABoat.lua",
+        dispo   = true,
     },
     {
-        name = "Blox Fruits",
+        name    = "Blox Fruits",
         placeId = 2753915549,
-        script = nil,
-        description = "Blox Fruits",
-        dispo = false,
+        script  = nil,
+        dispo   = false,
     },
-    -- Ajoute d'autres jeux ici en suivant le meme modele
 }
 
-GamesTab:CreateParagraph({
-    Title = "Laysox Launcher - Jeux",
-    Content = "Place ID actuel : "..tostring(currentPlaceId),
-})
-
--- ========================
--- SCRIPTS DISPONIBLES
--- ========================
-
-local dispoList = {}
+-- Trouver le jeu actuel
+local currentGame = nil
 for _, g in pairs(games) do
-    if g.dispo then table.insert(dispoList, g) end
-end
-
-GamesTab:CreateSection("Scripts disponibles")
-
-if #dispoList == 0 then
-    GamesTab:CreateParagraph({
-        Title = "Aucun script disponible",
-        Content = "Aucun script n'est disponible sur ce jeu.\nN'hesitez pas a faire la demande sur le serveur Discord!",
-    })
-else
-    for _, gameInfo in pairs(dispoList) do
-        local isCurrentGame = currentPlaceId == gameInfo.placeId
-        local status = isCurrentGame and " ✓ Tu es ici" or ""
-
-        GamesTab:CreateButton({
-            Name = gameInfo.name .. status,
-            Callback = function()
-                if not isCurrentGame then
-                    Rayfield:Notify({
-                        Title = "Mauvais jeu!",
-                        Content = "Va dans : "..gameInfo.name.."\nTon Place ID : "..tostring(currentPlaceId),
-                        Duration = 6,
-                    })
-                    return
-                end
-                Rayfield:Notify({
-                    Title = "Chargement...",
-                    Content = "Chargement de "..gameInfo.name.."...",
-                    Duration = 3,
-                })
-                task.wait(1)
-                Rayfield:Destroy()
-                task.wait(0.5)
-                sc(function()
-                    loadstring(game:HttpGet(gameInfo.script))()
-                end)
-            end,
-        })
-
-        GamesTab:CreateParagraph({
-            Title = gameInfo.name,
-            Content = gameInfo.description,
-        })
+    if g.placeId == currentPlaceId then
+        currentGame = g
+        break
     end
 end
 
 -- ========================
--- SCRIPTS NON DISPONIBLES
+-- SECTION : SCRIPT DISPO (jeu actuel uniquement)
+-- ========================
+
+GamesTab:CreateSection("Script disponible")
+
+if currentGame and currentGame.dispo then
+    -- Bouton simple, sans texte parasite
+    GamesTab:CreateButton({
+        Name = currentGame.name,
+        Callback = function()
+            Rayfield:Notify({
+                Title = "Chargement...",
+                Content = currentGame.name,
+                Duration = 3,
+            })
+            task.wait(1)
+            Rayfield:Destroy()
+            task.wait(0.5)
+            sc(function()
+                loadstring(game:HttpGet(currentGame.script))()
+            end)
+        end,
+    })
+else
+    GamesTab:CreateParagraph({
+        Title = "Aucun script disponible",
+        Content = "Aucun script n'est disponible sur ce jeu.\nN'hesitez pas a faire la demande sur le serveur Discord!",
+    })
+end
+
+-- ========================
+-- SECTION : SCRIPTS NON DISPONIBLES
+-- (tous les autres jeux dispo=false ET les jeux dispo=true où t'es pas)
 -- ========================
 
 local nonDispoList = {}
 for _, g in pairs(games) do
-    if not g.dispo then table.insert(nonDispoList, g) end
+    -- Affiche dans non-dispo : soit pas de script, soit c'est pas le jeu actuel
+    if not g.dispo or g.placeId ~= currentPlaceId then
+        table.insert(nonDispoList, g)
+    end
 end
 
 if #nonDispoList > 0 then
     GamesTab:CreateSection("Scripts non disponibles")
-
-    for _, gameInfo in pairs(nonDispoList) do
+    for _, g in pairs(nonDispoList) do
         GamesTab:CreateParagraph({
-            Title = gameInfo.name,
-            Content = "Aucun script n'est disponible sur ce jeu.\nN'hesitez pas a faire la demande sur le serveur Discord!",
+            Title = g.name,
+            Content = g.dispo
+                and "Script disponible mais tu n'es pas dans ce jeu."
+                or  "Aucun script disponible.\nFais la demande sur le Discord!",
         })
     end
 end
@@ -356,7 +340,7 @@ end
 local InfoTab = Window:CreateTab("Infos", 4483362458)
 InfoTab:CreateParagraph({
     Title = "Comment utiliser",
-    Content = "1. Onglet Universel : fonctionne partout\n2. Onglet Jeux : charge un script pour un jeu\n3. Tu dois etre dans le bon jeu\n4. Si le script n'est pas dispo, demande sur le Discord!",
+    Content = "1. Onglet Universel : fonctionne partout\n2. Onglet Jeux : le script de ton jeu actuel apparait en haut\n3. Si rien en haut : ton jeu n'a pas encore de script\n4. Demande sur le Discord pour qu'on l'ajoute!",
 })
 InfoTab:CreateButton({
     Name = "Rejoindre le Discord LSX",
