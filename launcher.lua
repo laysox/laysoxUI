@@ -1,12 +1,14 @@
 -- Laysox Launcher
+
 task.wait(2)
 
-local Players    = game:GetService("Players")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UIS        = game:GetService("UserInputService")
-
+local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
+
 repeat task.wait(0.5) until player.Character
+
 local character = player.Character
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local humanoid = character:WaitForChild("Humanoid")
@@ -96,6 +98,7 @@ local function startWS()
     if HumanModCons.ws then HumanModCons.ws:Disconnect() end
     HumanModCons.ws = h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
 end
+
 local function stopWS()
     if HumanModCons.ws then HumanModCons.ws:Disconnect() end
     local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
@@ -112,6 +115,7 @@ local function startIJ()
         end
     end)
 end
+
 local function stopIJ()
     if ijConnection then ijConnection:Disconnect(); ijConnection = nil end
 end
@@ -148,7 +152,10 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
+-- ========================
 -- TAB UNIVERSEL
+-- ========================
+
 local UniTab = Window:CreateTab("Universel", 4483362458)
 
 UniTab:CreateSection("Fly")
@@ -227,11 +234,17 @@ UniTab:CreateButton({Name="Teleporter", Callback=function()
     end
 end})
 
+-- ========================
 -- TAB JEUX
+-- ========================
+
 local GamesTab = Window:CreateTab("Jeux", 4483362458)
 
--- Place ID récupéré depuis la capture d'écran
 local currentPlaceId = game.PlaceId
+
+-- ⚠️ CONFIGURATION DES JEUX
+-- dispo = true  → script disponible (apparait dans "Scripts disponibles")
+-- dispo = false → pas de script (apparait dans "Scripts non disponibles")
 
 local games = {
     {
@@ -239,66 +252,111 @@ local games = {
         placeId = 124374448373637,
         script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
         description = "Auto job, XP farm, vitesse, tp...",
+        dispo = true,
     },
+    {
+        name = "Build A Boat For Treasure",
+        placeId = 537413528,
+        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/BuildABoat.lua",
+        description = "Auto farm, speed, fly...",
+        dispo = true,
+    },
+    {
+        name = "Blox Fruits",
+        placeId = 2753915549,
+        script = nil,
+        description = "Blox Fruits",
+        dispo = false,
+    },
+    -- Ajoute d'autres jeux ici en suivant le meme modele
 }
 
 GamesTab:CreateParagraph({
     Title = "Laysox Launcher - Jeux",
-    Content = "Clique sur un jeu pour charger son script.\nPlace ID actuel : "..tostring(currentPlaceId),
+    Content = "Place ID actuel : "..tostring(currentPlaceId),
 })
+
+-- ========================
+-- SCRIPTS DISPONIBLES
+-- ========================
+
+local dispoList = {}
+for _, g in pairs(games) do
+    if g.dispo then table.insert(dispoList, g) end
+end
 
 GamesTab:CreateSection("Scripts disponibles")
 
-for _, gameInfo in pairs(games) do
-    local isCurrentGame = currentPlaceId == gameInfo.placeId
-    local status = isCurrentGame and " [OK - Tu es ici]" or " [Pas ce jeu]"
-
-    GamesTab:CreateButton({
-        Name = gameInfo.name..status,
-        Callback = function()
-            if not isCurrentGame then
-                Rayfield:Notify({
-                    Title = "Mauvais jeu!",
-                    Content = "Place ID du jeu : "..tostring(gameInfo.placeId).."\nTon Place ID actuel : "..tostring(currentPlaceId),
-                    Duration = 6,
-                })
-                return
-            end
-            Rayfield:Notify({
-                Title = "Chargement...",
-                Content = "Chargement de "..gameInfo.name.."...",
-                Duration = 3,
-            })
-            task.wait(1)
-            Rayfield:Destroy()
-            task.wait(0.5)
-            sc(function()
-                loadstring(game:HttpGet(gameInfo.script))()
-            end)
-        end,
-    })
-
+if #dispoList == 0 then
     GamesTab:CreateParagraph({
-        Title = gameInfo.name,
-        Content = gameInfo.description.."\nPlace ID attendu : "..tostring(gameInfo.placeId),
+        Title = "Aucun script disponible",
+        Content = "Aucun script n'est disponible sur ce jeu.\nN'hesitez pas a faire la demande sur le serveur Discord!",
     })
+else
+    for _, gameInfo in pairs(dispoList) do
+        local isCurrentGame = currentPlaceId == gameInfo.placeId
+        local status = isCurrentGame and " ✓ Tu es ici" or ""
+
+        GamesTab:CreateButton({
+            Name = gameInfo.name .. status,
+            Callback = function()
+                if not isCurrentGame then
+                    Rayfield:Notify({
+                        Title = "Mauvais jeu!",
+                        Content = "Va dans : "..gameInfo.name.."\nTon Place ID : "..tostring(currentPlaceId),
+                        Duration = 6,
+                    })
+                    return
+                end
+                Rayfield:Notify({
+                    Title = "Chargement...",
+                    Content = "Chargement de "..gameInfo.name.."...",
+                    Duration = 3,
+                })
+                task.wait(1)
+                Rayfield:Destroy()
+                task.wait(0.5)
+                sc(function()
+                    loadstring(game:HttpGet(gameInfo.script))()
+                end)
+            end,
+        })
+
+        GamesTab:CreateParagraph({
+            Title = gameInfo.name,
+            Content = gameInfo.description,
+        })
+    end
 end
 
-GamesTab:CreateSection("Debug - Jeu actuel")
-GamesTab:CreateParagraph({
-    Title = "Ton Place ID",
-    Content = tostring(currentPlaceId).."\n\nSi le bouton dit [Pas ce jeu] meme si tu es dans le bon jeu, copie ce Place ID et dis le moi pour corriger.",
-})
+-- ========================
+-- SCRIPTS NON DISPONIBLES
+-- ========================
 
+local nonDispoList = {}
+for _, g in pairs(games) do
+    if not g.dispo then table.insert(nonDispoList, g) end
+end
+
+if #nonDispoList > 0 then
+    GamesTab:CreateSection("Scripts non disponibles")
+
+    for _, gameInfo in pairs(nonDispoList) do
+        GamesTab:CreateParagraph({
+            Title = gameInfo.name,
+            Content = "Aucun script n'est disponible sur ce jeu.\nN'hesitez pas a faire la demande sur le serveur Discord!",
+        })
+    end
+end
+
+-- ========================
 -- TAB INFOS
+-- ========================
+
 local InfoTab = Window:CreateTab("Infos", 4483362458)
 InfoTab:CreateParagraph({
     Title = "Comment utiliser",
-    Content = "1. Onglet Universel : fonctionne partout\n2. Onglet Jeux : charge un script pour un jeu\n3. Tu dois etre dans le bon jeu\n4. Si [Pas ce jeu] : note ton Place ID dans Debug",
-})
-InfoTab:CreateParagraph({
-    Title = "Scripts disponibles",
-    Content = "Carpet Cleaning Simulator - Auto job, XP farm...",
+    Content = "1. Onglet Universel : fonctionne partout\n2. Onglet Jeux : charge un script pour un jeu\n3. Tu dois etre dans le bon jeu\n4. Si le script n'est pas dispo, demande sur le Discord!",
 })
 InfoTab:CreateButton({
     Name = "Rejoindre le Discord LSX",
