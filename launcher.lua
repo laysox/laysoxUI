@@ -249,7 +249,7 @@ local GamesTab = Window:CreateTab("Jeux", 4483362458)
 local games = {
     {
         name = "Carpet Cleaning Simulator",
-        placeId = 108065646525411,
+        placeId = 124374448373637,
         script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
         description = "Auto job, XP farm, vitesse, tp..."
     },
