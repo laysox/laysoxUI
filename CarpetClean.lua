@@ -1,11 +1,11 @@
 -- CarpetClean Script | Laysox
 -- Carpet Cleaning Simulator
+-- Interface: Linoria Rewrite
 
-local Players    = game:GetService("Players")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UIS        = game:GetService("UserInputService")
-
-local lp     = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local lp = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local function sc(f,...) pcall(f,...) end
@@ -14,35 +14,33 @@ local function sc(f,...) pcall(f,...) end
 -- CONFIG
 -- ========================
 local Cfg = {
-    AutoJob     = false,
-    AutoJobXP   = 9999999,
-    AutoJobLoop = true,
-    AutoJobDelay= 1,
-    WS          = false,
-    WSVal       = 25,
-    Fly         = false,
-    FlySpd      = 100,
-    Noclip      = false,
-    IJ          = false,
+    AutoJob = false,
+    AutoJobXP = 9999999,
+    AutoJobDelay = 1,
+    WS = false,
+    WSVal = 25,
+    Fly = false,
+    FlySpd = 100,
+    Noclip = false,
+    IJ = false,
 }
 
-local HMC      = {}
-local noclipP  = {}
-local IJConn   = nil
-local FlyConn  = nil
+local HMC = {}
+local IJConn = nil
+local FlyConn = nil
 local autoJobThread = nil
-local FlyKey   = "G"
+local FlyKey = "G"
 
 -- ========================
 -- WAIT PERSO
 -- ========================
 local character = lp.Character or lp.CharacterAdded:Wait()
-local hrp       = character:WaitForChild("HumanoidRootPart", 10)
-local humanoid  = character:WaitForChild("Humanoid", 10)
+local hrp = character:WaitForChild("HumanoidRootPart", 10)
+local humanoid = character:WaitForChild("Humanoid", 10)
 
 local function refresh()
     character = lp.Character; if not character then return end
-    hrp      = character:FindFirstChild("HumanoidRootPart")
+    hrp = character:FindFirstChild("HumanoidRootPart")
     humanoid = character:FindFirstChildWhichIsA("Humanoid")
 end
 
@@ -51,7 +49,7 @@ lp.CharacterAdded:Connect(function()
 end)
 
 -- ========================
--- AUTO JOB (coeur du script)
+-- AUTO JOB
 -- ========================
 local function fireJob()
     sc(function()
@@ -90,6 +88,7 @@ local function startWS()
     if HMC.ws then HMC.ws:Disconnect() end
     HMC.ws = h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
 end
+
 local function stopWS()
     if HMC.ws then HMC.ws:Disconnect(); HMC.ws = nil end
     local h = lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
@@ -132,6 +131,7 @@ local function startFly()
         gyro.CFrame = cf
     end)
 end
+
 local function stopFly()
     Cfg.Fly = false
     if FlyConn then FlyConn:Disconnect(); FlyConn = nil end
@@ -166,6 +166,7 @@ local function startIJ()
         end
     end)
 end
+
 local function stopIJ()
     if IJConn then IJConn:Disconnect(); IJConn = nil end
 end
@@ -179,214 +180,196 @@ UIS.InputBegan:Connect(function(input, gp)
 end)
 
 -- ========================
--- RAYFIELD
+-- LINORIA REWRITE UI
 -- ========================
-local Rayfield
-sc(function()
-    Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-end)
-if not Rayfield then
-    task.wait(2)
-    sc(function()
-        Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-    end)
-end
-if not Rayfield then return end
 
-local Window = Rayfield:CreateWindow({
-    Name = "CarpetClean | Laysox",
-    LoadingTitle = "CarpetClean Script",
-    LoadingSubtitle = "by Laysox",
-    Theme = "Default",
-    DisableRayfieldPrompts = true,
-    DisableBuildWarnings = true,
-    ConfigurationSaving = {Enabled = false},
-    KeySystem = false,
+local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+
+local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
+
+local Window = Library:CreateWindow({
+    Title = 'CarpetClean | Laysox',
+    Center = true,
+    AutoShow = true,
 })
 
--- ========================
--- TAB AUTO FARM
--- ========================
-local FarmTab = Window:CreateTab("Auto Farm", 4483362458)
+local Tabs = {
+    AutoFarm = Window:AddTab('Auto Farm'),
+    Player   = Window:AddTab('Player'),
+    Settings = Window:AddTab('UI Settings'),
+}
 
-FarmTab:CreateSection("Auto Job")
+-- ========================
+-- AUTO FARM TAB
+-- ========================
 
-FarmTab:CreateToggle({
-    Name = "Auto Job (Complete jobs auto)",
-    CurrentValue = false,
-    Flag = "AutoJobToggle",
+local FarmBox = Tabs.AutoFarm:AddLeftGroupbox('Auto Job')
+
+FarmBox:AddToggle('AutoJobToggle', {
+    Text = 'Auto Job',
+    Default = false,
+    Tooltip = 'Complete les jobs automatiquement',
     Callback = function(v)
         if v then
             startAutoJob()
-            Rayfield:Notify({
-                Title = "Auto Job ON",
-                Content = "Jobs completes automatiquement!\nXP par job : "..Cfg.AutoJobXP,
-                Duration = 3,
-            })
+            Library:Notify('Auto Job ON - '..Cfg.AutoJobXP..' XP/job', 3)
         else
             stopAutoJob()
-            Rayfield:Notify({Title="Auto Job OFF", Content="Arrete.", Duration=2})
+            Library:Notify('Auto Job OFF', 2)
         end
-    end,
+    end
 })
 
-FarmTab:CreateSlider({
-    Name = "XP par job",
-    Range = {1000, 99999999},
-    Increment = 100000,
-    Suffix = " XP",
-    CurrentValue = 9999999,
-    Flag = "AutoJobXP",
+FarmBox:AddSlider('AutoJobXP', {
+    Text = 'XP par job',
+    Default = 9999999,
+    Min = 1000,
+    Max = 99999999,
+    Rounding = 0,
+    Compact = false,
     Callback = function(v)
         Cfg.AutoJobXP = v
-        Rayfield:Notify({Title="XP mis a jour", Content=v.." XP par job", Duration=2})
-    end,
+    end
 })
 
-FarmTab:CreateSlider({
-    Name = "Delai entre les jobs",
-    Range = {0, 10},
-    Increment = 1,
-    Suffix = " sec",
-    CurrentValue = 1,
-    Flag = "AutoJobDelay",
+FarmBox:AddSlider('AutoJobDelay', {
+    Text = 'Delai entre jobs (sec)',
+    Default = 1,
+    Min = 0,
+    Max = 10,
+    Rounding = 0,
+    Compact = false,
     Callback = function(v)
         Cfg.AutoJobDelay = math.max(v, 0)
-    end,
+    end
 })
 
-FarmTab:CreateButton({
-    Name = "Completer 1 job maintenant",
-    Callback = function()
+FarmBox:AddButton({
+    Text = 'Completer 1 job maintenant',
+    Func = function()
         fireJob()
-        Rayfield:Notify({Title="Job complete!", Content="+"..Cfg.AutoJobXP.." XP", Duration=2})
-    end,
+        Library:Notify('Job complete! +'..Cfg.AutoJobXP..' XP', 2)
+    end
 })
 
-FarmTab:CreateParagraph({
-    Title = "Comment ca marche",
-    Content = "Active Auto Job pour completer les jobs automatiquement.\nChaque job te donne l'XP configure.\nMets le delai a 0 pour etre le plus rapide possible.\nLe '1' dans les args est la perfection (ne pas changer).",
-})
+local FarmInfoBox = Tabs.AutoFarm:AddRightGroupbox('Info')
+
+FarmInfoBox:AddLabel('Active Auto Job pour farmer\nlXP automatiquement.')
+FarmInfoBox:AddLabel('Le delai a 0 = max speed.')
+FarmInfoBox:AddLabel('Ne change pas le "1" dans les args\n(perfection du job).')
 
 -- ========================
--- TAB PLAYER
+-- PLAYER TAB
 -- ========================
-local PlayerTab = Window:CreateTab("Player", 4483362458)
 
-PlayerTab:CreateSection("Mouvement")
+local FlyBox = Tabs.Player:AddLeftGroupbox('Fly')
 
-local FlyToggleUI = PlayerTab:CreateToggle({
-    Name = "Fly",
-    CurrentValue = false,
-    Flag = "FlyToggle",
+FlyBox:AddToggle('FlyToggle', {
+    Text = 'Activer Fly',
+    Default = false,
+    Tooltip = 'Toggle le fly (touche configurable)',
     Callback = function(v)
-        if v then startFly(); Rayfield:Notify({Title="Fly ON", Content=Cfg.FlySpd.." studs/s", Duration=2})
-        else stopFly(); Rayfield:Notify({Title="Fly OFF", Content="Retour au sol.", Duration=2}) end
-    end,
+        if v then startFly(); Library:Notify('Fly ON - '..Cfg.FlySpd..' studs/s', 2)
+        else stopFly(); Library:Notify('Fly OFF', 2) end
+    end
 })
 
-PlayerTab:CreateSlider({
-    Name = "Vitesse Fly",
-    Range = {10, 2000},
-    Increment = 10,
-    Suffix = " studs/s",
-    CurrentValue = 100,
-    Flag = "FlySpd",
-    Callback = function(v) Cfg.FlySpd = v end,
+FlyBox:AddSlider('FlySpd', {
+    Text = 'Vitesse Fly',
+    Default = 100,
+    Min = 10,
+    Max = 2000,
+    Rounding = 0,
+    Callback = function(v) Cfg.FlySpd = v end
 })
 
-PlayerTab:CreateDropdown({
-    Name = "Touche Fly",
-    Options = {"G","Q","E","R","T","F","H","J","K","L","Z","X","C","V","B","N","M","F1","F2","F3","F4","F5","F6"},
-    CurrentOption = {"G"},
-    Flag = "FlyKeyDD",
-    MultipleOptions = false,
-    Callback = function(o)
-        FlyKey = o[1]
-        Rayfield:Notify({Title="Touche Fly", Content="Fly -> "..o[1], Duration=2})
-    end,
+FlyBox:AddDropdown('FlyKeyDD', {
+    Text = 'Touche Fly',
+    Default = 'G',
+    Values = {'G','Q','E','R','T','F','H','J','K','L','Z','X','C','V','B','N','M','F1','F2','F3','F4','F5','F6'},
+    Multi = false,
+    Callback = function(v)
+        FlyKey = v
+        Library:Notify('Touche Fly -> '..v, 2)
+    end
 })
 
-PlayerTab:CreateParagraph({
-    Title = "Controles Fly",
-    Content = "W/A/S/D -> Directions\nSpace -> Monter\nCtrl -> Descendre",
-})
+FlyBox:AddLabel('W/A/S/D → Directions\nSpace → Monter | Ctrl → Descendre')
 
-PlayerTab:CreateSection("Vitesse & Saut")
+local MoveBox = Tabs.Player:AddRightGroupbox('Mouvement')
 
-local WSToggle = PlayerTab:CreateToggle({
-    Name = "WalkSpeed",
-    CurrentValue = false,
-    Flag = "WSToggle",
+MoveBox:AddToggle('WSToggle', {
+    Text = 'WalkSpeed',
+    Default = false,
     Callback = function(v)
         Cfg.WS = v
-        if v then startWS(); Rayfield:Notify({Title="Speed ON", Content=Cfg.WSVal.." studs", Duration=2})
-        else stopWS(); Rayfield:Notify({Title="Speed OFF", Content="Vitesse normale.", Duration=2}) end
-    end,
+        if v then startWS(); Library:Notify('Speed ON - '..Cfg.WSVal..' studs', 2)
+        else stopWS(); Library:Notify('Speed OFF', 2) end
+    end
 })
 
-PlayerTab:CreateSlider({
-    Name = "Set WalkSpeed",
-    Range = {16, 500},
-    Increment = 1,
-    Suffix = " studs",
-    CurrentValue = 25,
-    Flag = "WSVal",
-    Callback = function(v) Cfg.WSVal = v end,
+MoveBox:AddSlider('WSVal', {
+    Text = 'WalkSpeed',
+    Default = 25,
+    Min = 16,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(v) Cfg.WSVal = v end
 })
 
-PlayerTab:CreateToggle({
-    Name = "Infinite Jump",
-    CurrentValue = false,
-    Flag = "IJToggle",
+MoveBox:AddToggle('IJToggle', {
+    Text = 'Infinite Jump',
+    Default = false,
     Callback = function(v)
         Cfg.IJ = v
-        if v then startIJ(); Rayfield:Notify({Title="Infinite Jump ON", Content="Saute sans limite!", Duration=2})
-        else stopIJ(); Rayfield:Notify({Title="Infinite Jump OFF", Content="Saut normal.", Duration=2}) end
-    end,
+        if v then startIJ(); Library:Notify('Infinite Jump ON', 2)
+        else stopIJ(); Library:Notify('Infinite Jump OFF', 2) end
+    end
 })
 
-PlayerTab:CreateSection("Physique")
-
-PlayerTab:CreateToggle({
-    Name = "Noclip",
-    CurrentValue = false,
-    Flag = "NoclipToggle",
+MoveBox:AddToggle('NoclipToggle', {
+    Text = 'Noclip',
+    Default = false,
     Callback = function(v)
         Cfg.Noclip = v
-        Rayfield:Notify({Title=v and "Noclip ON" or "Noclip OFF",
-            Content=v and "Tu traverses les murs." or "Collisions restaurees.", Duration=2})
-    end,
+        Library:Notify(v and 'Noclip ON' or 'Noclip OFF', 2)
+    end
 })
 
 -- ========================
--- TAB SETTINGS
+-- SETTINGS TAB
 -- ========================
-local SettTab = Window:CreateTab("Settings", 4483362458)
 
-SettTab:CreateSection("Actions")
-SettTab:CreateButton({
-    Name = "FERMER LE SCRIPT",
-    Callback = function()
+local MenuBox = Tabs.Settings:AddLeftGroupbox('Menu')
+
+MenuBox:AddButton({
+    Text = 'Rejoindre le Discord LSX',
+    Func = function()
+        sc(function() setclipboard('https://discord.gg/94CnwG3ySJ') end)
+        Library:Notify('Lien Discord copie!', 3)
+    end
+})
+
+MenuBox:AddButton({
+    Text = 'Fermer le script',
+    Func = function()
         stopAutoJob()
-        Cfg.Fly = false; Cfg.WS = false; Cfg.Noclip = false
-        sc(function() stopFly() end); sc(function() stopWS() end); sc(function() stopIJ() end)
+        sc(function() stopFly() end)
+        sc(function() stopWS() end)
+        sc(function() stopIJ() end)
         local h = lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
         if h then h.WalkSpeed = 16 end
-        Rayfield:Destroy()
-    end,
+        Library:Unload()
+    end
 })
 
-SettTab:CreateButton({
-    Name = "Rejoindre le Discord LSX",
-    Callback = function()
-        sc(function() setclipboard("https://discord.gg/94CnwG3ySJ") end)
-        Rayfield:Notify({Title="Discord", Content="Lien copie!", Duration=3})
-    end,
-})
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:SetIgnoreIndexes({})
+SaveManager:SetFolder('LaysoxScripts/CarpetClean')
+ThemeManager:ApplyToTab(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
 
-Rayfield:Notify({
-    Title = "CarpetClean charge!",
-    Content = "Active Auto Job pour farmer l'XP automatiquement.",
-    Duration = 4,
-})
+Library:Notify('CarpetClean charge! Active Auto Job pour farmer.', 4)
