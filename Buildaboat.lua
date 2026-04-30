@@ -11,17 +11,14 @@ local plr = Players.LocalPlayer
 local cfg = {
     farmActive    = false,
     farmCancelled = false,
-    tpDelay       = 0.8,  -- réduit (était 2)
-    runDelay      = 0.5,  -- ultra court entre runs (était 4)
+    tpDelay       = 0.8,
+    runDelay      = 0.5,
     antiAfk       = false,
 }
 
 local ouro = 0
-local fase  = 1
 
--- ========================
 -- ANTI AFK
--- ========================
 local function startAntiAfk()
     task.spawn(function()
         while cfg.antiAfk do
@@ -34,16 +31,11 @@ local function startAntiAfk()
     end)
 end
 
--- ========================
--- FIX MORT AU COFFRE
--- On rend le perso invincible juste avant le coffre
--- ========================
+-- FIX MORT AU COFFRE : invincible temporaire
 local function setInvincible(state)
     pcall(function()
-        local c = plr.Character
-        if not c then return end
-        local h = c:FindFirstChildWhichIsA("Humanoid")
-        if not h then return end
+        local c = plr.Character; if not c then return end
+        local h = c:FindFirstChildWhichIsA("Humanoid"); if not h then return end
         if state then
             h.MaxHealth = math.huge
             h.Health    = math.huge
@@ -54,9 +46,7 @@ local function setInvincible(state)
     end)
 end
 
--- ========================
 -- CORE FARM
--- ========================
 local function doRun()
     local char = plr.Character
     if not char then
@@ -70,37 +60,30 @@ local function doRun()
 
     local stages = workspace:FindFirstChild("BoatStages")
         and workspace.BoatStages:FindFirstChild("NormalStages")
-
     if not stages then return end
 
-    -- Parcours des CaveStages 1 à 10
+    -- Parcours CaveStage 1 à 10
     for i = 1, 10 do
         if not cfg.farmActive or cfg.farmCancelled then return end
 
-        -- Re-check perso à chaque étape
-        char = plr.Character
-        if not char then return end
-        r = char:FindFirstChild("HumanoidRootPart")
-        if not r then return end
+        char = plr.Character; if not char then return end
+        r = char:FindFirstChild("HumanoidRootPart"); if not r then return end
 
         local stage = stages:FindFirstChild("CaveStage" .. i)
         if stage then
             local dp = stage:FindFirstChild("DarknessPart")
             if dp then
-                -- Floor invisible pour éviter de tomber dans le vide
                 local floor = Instance.new("Part")
                 floor.Anchored    = true
                 floor.CanCollide  = true
                 floor.Size        = Vector3.new(10, 1, 10)
-                floor.Transparency= 1
+                floor.Transparency = 1
                 floor.Position    = dp.Position - Vector3.new(0, 2.5, 0)
                 floor.Parent      = workspace
 
                 r.CFrame = dp.CFrame + Vector3.new(0, 1, 0)
                 task.wait(cfg.tpDelay)
                 floor:Destroy()
-
-                fase = i
             end
         end
     end
@@ -114,27 +97,23 @@ local function doRun()
         if chest then
             local trigger = chest:FindFirstChild("Trigger")
             if trigger then
+                char = plr.Character; if not char then return end
+                r = char:FindFirstChild("HumanoidRootPart"); if not r then return end
 
-                char = plr.Character
-                if not char then return end
-                r = char:FindFirstChild("HumanoidRootPart")
-                if not r then return end
-
-                -- INVINCIBLE avant coffre
+                -- Invincible avant coffre
                 setInvincible(true)
 
-                -- Floor sous le coffre pour pas tomber
                 local floor2 = Instance.new("Part")
                 floor2.Anchored    = true
                 floor2.CanCollide  = true
                 floor2.Size        = Vector3.new(20, 1, 20)
-                floor2.Transparency= 1
+                floor2.Transparency = 1
                 floor2.Position    = trigger.Position - Vector3.new(0, 3, 0)
                 floor2.Parent      = workspace
 
                 r.CFrame = trigger.CFrame + Vector3.new(0, 1, 0)
 
-                -- Attente courte coffre (max 4s au lieu de 10)
+                -- Attente coffre max 4s
                 local waited = 0
                 local got    = false
                 while waited < 4 and cfg.farmActive do
@@ -149,48 +128,39 @@ local function doRun()
                 floor2:Destroy()
                 setInvincible(false)
 
-                if got then
-                    ouro += 100
-                end
+                if got then ouro += 100 end
             end
         end
     end
 
     if not cfg.farmActive or cfg.farmCancelled then return end
 
-    -- Attente respawn RAPIDE (timeout 10s au lieu de 30)
+    -- Attente respawn rapide (timeout 10s)
     local spawned = false
     local conn
     conn = plr.CharacterAdded:Connect(function()
         spawned = true
         conn:Disconnect()
     end)
-
     local t = 0
     while not spawned and cfg.farmActive and t < 10 do
-        task.wait(0.3)
-        t += 0.3
+        task.wait(0.3); t += 0.3
     end
-
-    if spawned then task.wait(0.8) end  -- juste le temps que le perso charge
-    task.wait(cfg.runDelay)             -- délai configurable entre runs
+    if spawned then task.wait(0.8) end
+    task.wait(cfg.runDelay)
 end
 
 local function farmLoop()
     while cfg.farmActive and not cfg.farmCancelled do
-        local ok, err = pcall(doRun)
-        if not ok then
-            task.wait(2)
-        end
+        local ok, _ = pcall(doRun)
+        if not ok then task.wait(2) end
     end
 end
 
 -- ========================
--- LINORIA REWRITE UI
+-- LINORIA REWRITE
 -- ========================
-
 local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
-
 local Library      = loadstring(game:HttpGet(repo .. 'Library.lua'))()
 local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
 local SaveManager  = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
@@ -206,16 +176,13 @@ local Tabs = {
     Settings = Window:AddTab('UI Settings'),
 }
 
--- ========================
 -- FARM TAB
--- ========================
-
 local FarmBox = Tabs.Farm:AddLeftGroupbox('Auto Farm')
 
 FarmBox:AddToggle('FarmToggle', {
     Text     = 'Auto Farm',
     Default  = false,
-    Tooltip  = 'Farm automatique - coffre gold',
+    Tooltip  = 'Farm gold automatique - coffre final',
     Callback = function(v)
         cfg.farmActive    = v
         cfg.farmCancelled = not v
@@ -256,7 +223,7 @@ FarmBox:AddToggle('AntiAfk', {
     end
 })
 
--- Compteur gold live
+-- Stats gold live
 local InfoBox   = Tabs.Farm:AddRightGroupbox('Stats')
 local goldLabel = InfoBox:AddLabel('Gold ramasse : 0')
 
@@ -269,26 +236,20 @@ task.spawn(function()
     end
 end)
 
-InfoBox:AddLabel('Fixes appliques :')
+InfoBox:AddLabel('Fixes :')
 InfoBox:AddLabel('→ Invincible au coffre final')
 InfoBox:AddLabel('→ Floor anti-chute a chaque stage')
-InfoBox:AddLabel('→ Delai relance ultra rapide')
-InfoBox:AddLabel('→ Timeout coffre 4s (etait 10s)')
+InfoBox:AddLabel('→ Relance ultra rapide')
 
--- ========================
 -- SETTINGS TAB
--- ========================
-
 local MenuBox = Tabs.Settings:AddLeftGroupbox('Menu')
-
 MenuBox:AddButton({
-    Text = 'Rejoindre le Discord LSX',
+    Text = 'Discord LSX',
     Func = function()
         pcall(function() setclipboard('https://discord.gg/94CnwG3ySJ') end)
         Library:Notify('Lien Discord copie!', 3)
     end
 })
-
 MenuBox:AddButton({
     Text = 'Fermer le script',
     Func = function()
