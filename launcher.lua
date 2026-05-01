@@ -253,18 +253,35 @@ local games = {
         script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
         description = "Auto job, XP farm, vitesse, tp..."
     },
-    -- Ajoute tes futurs jeux ici :
-    -- {
-    --     name = "Nom du jeu",
-    --     placeId = 123456789,
-    --     script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/nomdujeu.lua",
-    --     description = "Description du script"
-    -- },
+    {
+        name = "Ban or Get Banned - Infinite Money",
+        placeId = 96017656548489,
+        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/infinite_money.lua",
+        description = "Infinite money farm automatique."
+    },
+    {
+        name = "BloxStrike - Skin Changer",
+        placeId = 114234929420007,
+        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/bloxstrike_skin_changer.lua",
+        description = "Skin changer pour BloxStrike."
+    },
+    {
+        name = "Free Emote (Universel)",
+        placeId = 0, -- fonctionne dans tous les jeux
+        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/free_emote.lua",
+        description = "Script d'emotes gratuits, fonctionne partout."
+    },
+    {
+        name = "Ninja Legends",
+        placeId = 3956818381,
+        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/ninja_legends.lua",
+        description = "Auto farm, boss, pets, teleports, ESP..."
+    },
 }
 
 GamesTab:CreateParagraph({
     Title = "Laysox Launcher - Jeux",
-    Content = "Clique sur un jeu pour charger son script.\nTu dois etre dans le bon jeu.",
+    Content = "Clique sur un jeu pour charger son script.\nTu dois etre dans le bon jeu.\n(Free Emote fonctionne partout)",
 })
 
 GamesTab:CreateSection("Scripts disponibles")
@@ -272,8 +289,16 @@ GamesTab:CreateSection("Scripts disponibles")
 local currentPlaceId = game.PlaceId
 
 for _, gameInfo in pairs(games) do
-    local isCurrentGame = currentPlaceId == gameInfo.placeId
-    local status = isCurrentGame and " [OK]" or " [PAS CE JEU]"
+    -- Free Emote est universel (placeId = 0)
+    local isCurrentGame = (gameInfo.placeId == 0) or (currentPlaceId == gameInfo.placeId)
+    local status
+    if gameInfo.placeId == 0 then
+        status = " [UNIVERSEL]"
+    elseif isCurrentGame then
+        status = " [OK]"
+    else
+        status = " [PAS CE JEU]"
+    end
 
     GamesTab:CreateButton({
         Name = gameInfo.name..status,
@@ -302,7 +327,7 @@ for _, gameInfo in pairs(games) do
 
     GamesTab:CreateParagraph({
         Title = gameInfo.name,
-        Content = gameInfo.description.."\nPlace ID : "..tostring(gameInfo.placeId),
+        Content = gameInfo.description.."\nPlace ID : "..(gameInfo.placeId == 0 and "Universel" or tostring(gameInfo.placeId)),
     })
 end
 
@@ -322,7 +347,7 @@ InfoTab:CreateParagraph({
 })
 InfoTab:CreateParagraph({
     Title = "Scripts disponibles",
-    Content = "Carpet Cleaning Simulator - Auto job, XP farm...",
+    Content = "Carpet Cleaning Simulator - Auto job, XP farm...\nBan or Get Banned - Infinite Money\nBloxStrike - Skin Changer\nFree Emote - Universel\nNinja Legends - Auto farm, boss, pets...",
 })
 InfoTab:CreateParagraph({
     Title = "Universel - Fonctions",
@@ -331,7 +356,7 @@ InfoTab:CreateParagraph({
 InfoTab:CreateButton({
     Name = "Rejoindre le Discord LSX",
     Callback = function()
-        sc(function() setclipboard("https://discord.gg/94CnwG3ySJ") end)
+        sc(function() setclipboard("https://discord.gg/tFkAe2RVKB") end)
         Rayfield:Notify({Title="Discord", Content="Lien copie!", Duration=3})
     end,
 })
