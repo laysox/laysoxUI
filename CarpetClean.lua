@@ -1,96 +1,58 @@
--- CarpetClean Script | Laysox
--- Interface: Linoria Rewrite
+-- Laysox Launcher
+task.wait(2)
 
-local Players = game:GetService("Players")
+local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local lp = Players.LocalPlayer
+local UIS        = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+repeat task.wait(0.5) until player.Character
+local character = player.Character
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
 local Camera = workspace.CurrentCamera
 
 local function sc(f,...) pcall(f,...) end
 
-local Cfg = {
-    AutoJob      = false,
-    AutoJobXP    = 9999999,
-    AutoJobDelay = 1,
-    WS           = false,
-    WSVal        = 25,
-    Fly          = false,
-    FlySpd       = 100,
-    Noclip       = false,
-    IJ           = false,
-}
-
-local HMC          = {}
-local IJConn       = nil
-local FlyConn      = nil
-local autoJobThread= nil
-local FlyKey       = "G"
-
-local character = lp.Character or lp.CharacterAdded:Wait()
-local hrp       = character:WaitForChild("HumanoidRootPart", 10)
+local flySpeed = 100
+local flyActive = false
+local flyKeyName = "G"
+local noclip = false
+local wsActive = false
+local wsValue = 50
+local ijConnection = nil
+local HumanModCons = {}
 
 local function refresh()
-    character = lp.Character; if not character then return end
-    hrp = character:FindFirstChild("HumanoidRootPart")
-end
-lp.CharacterAdded:Connect(function() task.wait(1); refresh() end)
-
--- AUTO JOB
-local function fireJob()
-    sc(function()
-        game:GetService("ReplicatedStorage")
-            :WaitForChild("Remotes")
-            :WaitForChild("RequestJobComplete")
-            :FireServer(1, Cfg.AutoJobXP)
-    end)
-end
-local function startAutoJob()
-    if autoJobThread then return end
-    Cfg.AutoJob = true
-    autoJobThread = task.spawn(function()
-        while Cfg.AutoJob do fireJob(); task.wait(Cfg.AutoJobDelay) end
-        autoJobThread = nil
-    end)
-end
-local function stopAutoJob()
-    Cfg.AutoJob = false; autoJobThread = nil
+    character = player.Character; if not character then return end
+    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    humanoid = character:WaitForChild("Humanoid")
 end
 
--- WALKSPEED
-local function startWS()
-    local h = lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
-    if not h then return end
-    local function apply() h.WalkSpeed = Cfg.WSVal end; apply()
-    if HMC.ws then HMC.ws:Disconnect() end
-    HMC.ws = h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
-end
-local function stopWS()
-    if HMC.ws then HMC.ws:Disconnect(); HMC.ws = nil end
-    local h = lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
-    if h then h.WalkSpeed = 16 end
-end
+player.CharacterAdded:Connect(function()
+    task.wait(1); refresh()
+    flyActive = false; noclip = false; wsActive = false
+end)
 
--- FLY
 local function startFly()
-    if Cfg.Fly then return end
-    Cfg.Fly = true
-    local h = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if not h then Cfg.Fly = false; return end
+    if flyActive then return end
+    flyActive = true
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
     sc(function()
-        if h:FindFirstChild("FG") then h.FG:Destroy() end
-        if h:FindFirstChild("FV") then h.FV:Destroy() end
+        if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+        if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
     end)
-    local gyro = Instance.new("BodyGyro"); gyro.Name="FG"
+    local gyro = Instance.new("BodyGyro"); gyro.Name="FlyGyro"
     gyro.MaxTorque = Vector3.new(1,1,1)*math.huge; gyro.P=100000
-    gyro.CFrame = h.CFrame; gyro.Parent = h
-    local vel = Instance.new("BodyVelocity"); vel.Name="FV"
+    gyro.CFrame = hrp.CFrame; gyro.Parent = hrp
+    local vel = Instance.new("BodyVelocity"); vel.Name="FlyVelocity"
     vel.MaxForce = Vector3.new(1,1,1)*math.huge; vel.P=10000
-    vel.Velocity = Vector3.zero; vel.Parent = h
-    if FlyConn then FlyConn:Disconnect() end
-    FlyConn = RunService.RenderStepped:Connect(function()
-        if not Cfg.Fly or not h or not h.Parent then
-            if FlyConn then FlyConn:Disconnect(); FlyConn = nil end
+    vel.Velocity = Vector3.zero; vel.Parent = hrp
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        if not flyActive or not hrp or not hrp.Parent then
+            if conn then conn:Disconnect() end
             sc(function() gyro:Destroy() end); sc(function() vel:Destroy() end)
             return
         end
@@ -101,38 +63,49 @@ local function startFly()
         if UIS:IsKeyDown(Enum.KeyCode.D) then mv = mv + cf.RightVector end
         if UIS:IsKeyDown(Enum.KeyCode.Space) then mv = mv + Vector3.new(0,1,0) end
         if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then mv = mv - Vector3.new(0,1,0) end
-        vel.Velocity = mv.Magnitude > 0 and mv.Unit * Cfg.FlySpd or Vector3.zero
-        gyro.CFrame = cf
+        vel.Velocity = mv.Magnitude > 0 and mv.Unit * flySpeed or Vector3.zero
+        gyro.CFrame = Camera.CFrame
     end)
 end
+
 local function stopFly()
-    Cfg.Fly = false
-    if FlyConn then FlyConn:Disconnect(); FlyConn = nil end
-    local h = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if h then
+    flyActive = false
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
         sc(function()
-            if h:FindFirstChild("FG") then h.FG:Destroy() end
-            if h:FindFirstChild("FV") then h.FV:Destroy() end
+            if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+            if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
         end)
     end
 end
 
--- NOCLIP
 task.spawn(function()
     while task.wait(0.25) do
-        if not Cfg.Noclip then continue end
-        local c = lp.Character; if not c then continue end
-        for _, p in ipairs(c:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide = false end
+        if not noclip then continue end
+        local c = player.Character; if not c then continue end
+        for _, part in pairs(c:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
 end)
 
--- INFINITE JUMP
+local function startWS()
+    local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
+    if not h then return end
+    local function apply() h.WalkSpeed = wsValue end; apply()
+    if HumanModCons.ws then HumanModCons.ws:Disconnect() end
+    HumanModCons.ws = h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
+end
+local function stopWS()
+    if HumanModCons.ws then HumanModCons.ws:Disconnect() end
+    local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
+    if h then h.WalkSpeed = 16 end
+end
+
 local function startIJ()
-    if IJConn then return end
-    IJConn = UIS.JumpRequest:Connect(function()
-        local c = lp.Character
+    if ijConnection then return end
+    ijConnection = UIS.JumpRequest:Connect(function()
+        local c = player.Character
         if c then
             local h = c:FindFirstChildWhichIsA("Humanoid")
             if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
@@ -140,163 +113,197 @@ local function startIJ()
     end)
 end
 local function stopIJ()
-    if IJConn then IJConn:Disconnect(); IJConn = nil end
+    if ijConnection then ijConnection:Disconnect(); ijConnection = nil end
 end
 
--- FLY KEY
 UIS.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if input.KeyCode.Name == FlyKey then
-        if Cfg.Fly then stopFly() else startFly() end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    if input.KeyCode.Name == flyKeyName then
+        if flyActive then stopFly() else startFly() end
     end
 end)
 
--- ========================
--- LINORIA REWRITE
--- ========================
-local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
-local Library      = loadstring(game:HttpGet(repo .. 'Library.lua'))()
-local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
-local SaveManager  = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
+-- RAYFIELD
+local Rayfield
+sc(function()
+    Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+end)
+if not Rayfield then
+    task.wait(2)
+    sc(function()
+        Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+    end)
+end
+if not Rayfield then return end
 
-local Window = Library:CreateWindow({
-    Title    = 'CarpetClean | Laysox',
-    Center   = true,
-    AutoShow = true,
+local Window = Rayfield:CreateWindow({
+    Name = "Laysox Launcher",
+    LoadingTitle = "Laysox Launcher",
+    LoadingSubtitle = "Chargement...",
+    Theme = "Default",
+    DisableRayfieldPrompts = true,
+    DisableBuildWarnings = true,
+    ConfigurationSaving = {Enabled = false},
+    KeySystem = false,
 })
 
-local Tabs = {
-    Farm     = Window:AddTab('Auto Farm'),
-    Player   = Window:AddTab('Player'),
-    Settings = Window:AddTab('UI Settings'),
+-- TAB UNIVERSEL
+local UniTab = Window:CreateTab("Universel", 4483362458)
+
+UniTab:CreateSection("Fly")
+UniTab:CreateSlider({
+    Name = "Vitesse Fly", Range = {10,2000}, Increment = 10,
+    Suffix = " studs/s", CurrentValue = 100, Flag = "UniFlySpeed",
+    Callback = function(v) flySpeed = v end,
+})
+UniTab:CreateToggle({
+    Name = "Activer Fly", CurrentValue = false, Flag = "UniFlyToggle",
+    Callback = function(v)
+        if v then startFly(); Rayfield:Notify({Title="Fly ON", Content=flySpeed.." studs/s", Duration=2})
+        else stopFly(); Rayfield:Notify({Title="Fly OFF", Content="Retour au sol.", Duration=2}) end
+    end,
+})
+UniTab:CreateDropdown({
+    Name = "Touche Fly",
+    Options = {"G","Q","E","R","T","F","H","J","K","L","Z","X","C","V","B","N","M","F1","F2","F3","F4","F5","F6","LeftShift","LeftAlt","Tab"},
+    CurrentOption = {"G"}, Flag = "UniFlyKey", MultipleOptions = false,
+    Callback = function(o)
+        flyKeyName = o[1]
+        Rayfield:Notify({Title="Touche Fly", Content="Fly -> "..o[1], Duration=2})
+    end,
+})
+UniTab:CreateParagraph({
+    Title = "Controles Fly",
+    Content = "W/A/S/D -> Directions\nSpace -> Monter\nCtrl -> Descendre\nTouche configuree -> Toggle",
+})
+
+UniTab:CreateSection("Noclip")
+UniTab:CreateToggle({
+    Name = "Noclip", CurrentValue = false, Flag = "UniNoclip",
+    Callback = function(v)
+        noclip = v
+        Rayfield:Notify({Title=v and "Noclip ON" or "Noclip OFF",
+            Content=v and "Tu traverses les murs." or "Collisions restaurees.", Duration=2})
+    end,
+})
+
+UniTab:CreateSection("Vitesse")
+UniTab:CreateSlider({
+    Name = "WalkSpeed", Range = {16,500}, Increment = 1,
+    Suffix = " studs", CurrentValue = 50, Flag = "UniWalkSpeed",
+    Callback = function(v) wsValue = v; if wsActive then startWS() end end,
+})
+UniTab:CreateToggle({
+    Name = "Activer WalkSpeed", CurrentValue = false, Flag = "UniWSToggle",
+    Callback = function(v)
+        wsActive = v
+        if v then startWS(); Rayfield:Notify({Title="Speed ON", Content=wsValue.." studs", Duration=2})
+        else stopWS(); Rayfield:Notify({Title="Speed OFF", Content="Vitesse normale.", Duration=2}) end
+    end,
+})
+
+UniTab:CreateSection("Saut")
+UniTab:CreateToggle({
+    Name = "Infinite Jump", CurrentValue = false, Flag = "UniIJ",
+    Callback = function(v)
+        if v then startIJ(); Rayfield:Notify({Title="Infinite Jump ON", Content="Saute sans limite!", Duration=2})
+        else stopIJ(); Rayfield:Notify({Title="Infinite Jump OFF", Content="Saut normal.", Duration=2}) end
+    end,
+})
+
+UniTab:CreateSection("Teleport rapide")
+local qx, qy, qz = 0, 0, 0
+UniTab:CreateInput({Name="X", PlaceholderText="100", RemoveTextAfterFocusLost=false, Flag="UniX",
+    Callback=function(v) qx=tonumber(v) or qx end})
+UniTab:CreateInput({Name="Y", PlaceholderText="50", RemoveTextAfterFocusLost=false, Flag="UniY",
+    Callback=function(v) qy=tonumber(v) or qy end})
+UniTab:CreateInput({Name="Z", PlaceholderText="200", RemoveTextAfterFocusLost=false, Flag="UniZ",
+    Callback=function(v) qz=tonumber(v) or qz end})
+UniTab:CreateButton({Name="Teleporter", Callback=function()
+    if humanoidRootPart then
+        humanoidRootPart.CFrame = CFrame.new(qx, qy, qz)
+        Rayfield:Notify({Title="TP!", Content=("X:%d Y:%d Z:%d"):format(qx,qy,qz), Duration=2})
+    end
+end})
+
+-- TAB JEUX
+local GamesTab = Window:CreateTab("Jeux", 4483362458)
+
+-- Place ID récupéré depuis la capture d'écran
+local currentPlaceId = game.PlaceId
+
+local games = {
+    {
+        name = "Carpet Cleaning Simulator",
+        placeId = 124374448373637,
+        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
+        description = "Auto job, XP farm, vitesse, tp...",
+    },
 }
 
--- AUTO FARM TAB
-local FarmBox = Tabs.Farm:AddLeftGroupbox('Auto Job')
-
-FarmBox:AddToggle('AutoJobToggle', {
-    Text     = 'Auto Job',
-    Default  = false,
-    Tooltip  = 'Complete les jobs automatiquement',
-    Callback = function(v)
-        if v then startAutoJob(); Library:Notify('Auto Job ON - '..Cfg.AutoJobXP..' XP/job', 3)
-        else stopAutoJob(); Library:Notify('Auto Job OFF', 2) end
-    end
+GamesTab:CreateParagraph({
+    Title = "Laysox Launcher - Jeux",
+    Content = "Clique sur un jeu pour charger son script.\nPlace ID actuel : "..tostring(currentPlaceId),
 })
 
-FarmBox:AddSlider('AutoJobXP', {
-    Text     = 'XP par job',
-    Default  = 9999999,
-    Min      = 1000,
-    Max      = 99999999,
-    Rounding = 0,
-    Callback = function(v) Cfg.AutoJobXP = v end
+GamesTab:CreateSection("Scripts disponibles")
+
+for _, gameInfo in pairs(games) do
+    local isCurrentGame = currentPlaceId == gameInfo.placeId
+    local status = isCurrentGame and " [OK - Tu es ici]" or " [Pas ce jeu]"
+
+    GamesTab:CreateButton({
+        Name = gameInfo.name..status,
+        Callback = function()
+            if not isCurrentGame then
+                Rayfield:Notify({
+                    Title = "Mauvais jeu!",
+                    Content = "Place ID du jeu : "..tostring(gameInfo.placeId).."\nTon Place ID actuel : "..tostring(currentPlaceId),
+                    Duration = 6,
+                })
+                return
+            end
+            Rayfield:Notify({
+                Title = "Chargement...",
+                Content = "Chargement de "..gameInfo.name.."...",
+                Duration = 3,
+            })
+            task.wait(1)
+            Rayfield:Destroy()
+            task.wait(0.5)
+            sc(function()
+                loadstring(game:HttpGet(gameInfo.script))()
+            end)
+        end,
+    })
+
+    GamesTab:CreateParagraph({
+        Title = gameInfo.name,
+        Content = gameInfo.description.."\nPlace ID attendu : "..tostring(gameInfo.placeId),
+    })
+end
+
+GamesTab:CreateSection("Debug - Jeu actuel")
+GamesTab:CreateParagraph({
+    Title = "Ton Place ID",
+    Content = tostring(currentPlaceId).."\n\nSi le bouton dit [Pas ce jeu] meme si tu es dans le bon jeu, copie ce Place ID et dis le moi pour corriger.",
 })
 
-FarmBox:AddSlider('AutoJobDelay', {
-    Text     = 'Delai entre jobs (sec)',
-    Default  = 1,
-    Min      = 0,
-    Max      = 10,
-    Rounding = 0,
-    Callback = function(v) Cfg.AutoJobDelay = math.max(v, 0) end
+-- TAB INFOS
+local InfoTab = Window:CreateTab("Infos", 4483362458)
+InfoTab:CreateParagraph({
+    Title = "Comment utiliser",
+    Content = "1. Onglet Universel : fonctionne partout\n2. Onglet Jeux : charge un script pour un jeu\n3. Tu dois etre dans le bon jeu\n4. Si [Pas ce jeu] : note ton Place ID dans Debug",
 })
-
-FarmBox:AddButton({
-    Text = 'Completer 1 job maintenant',
-    Func = function()
-        fireJob()
-        Library:Notify('Job complete! +'..Cfg.AutoJobXP..' XP', 2)
-    end
+InfoTab:CreateParagraph({
+    Title = "Scripts disponibles",
+    Content = "Carpet Cleaning Simulator - Auto job, XP farm...",
 })
-
-local FarmInfo = Tabs.Farm:AddRightGroupbox('Info')
-FarmInfo:AddLabel('Active Auto Job pour farmer')
-FarmInfo:AddLabel("l'XP automatiquement.")
-FarmInfo:AddLabel('Delai a 0 = max speed.')
-
--- PLAYER TAB
-local FlyBox = Tabs.Player:AddLeftGroupbox('Fly')
-
-FlyBox:AddToggle('FlyToggle', {
-    Text     = 'Activer Fly',
-    Default  = false,
-    Callback = function(v)
-        if v then startFly(); Library:Notify('Fly ON - '..Cfg.FlySpd..' studs/s', 2)
-        else stopFly(); Library:Notify('Fly OFF', 2) end
-    end
+InfoTab:CreateButton({
+    Name = "Rejoindre le Discord LSX",
+    Callback = function()
+        sc(function() setclipboard("https://discord.gg/94CnwG3ySJ") end)
+        Rayfield:Notify({Title="Discord", Content="Lien copie!", Duration=3})
+    end,
 })
-FlyBox:AddSlider('FlySpd', {
-    Text = 'Vitesse Fly', Default = 100, Min = 10, Max = 2000, Rounding = 0,
-    Callback = function(v) Cfg.FlySpd = v end
-})
-FlyBox:AddDropdown('FlyKeyDD', {
-    Text     = 'Touche Fly',
-    Default  = 'G',
-    Values   = {'G','Q','E','R','T','F','H','J','K','L','Z','X','C','V','B','N','M','F1','F2','F3','F4','F5','F6'},
-    Multi    = false,
-    Callback = function(v) FlyKey = v; Library:Notify('Touche Fly -> '..v, 2) end
-})
-FlyBox:AddLabel('W/A/S/D → Directions')
-FlyBox:AddLabel('Space → Monter | Ctrl → Descendre')
-
-local MoveBox = Tabs.Player:AddRightGroupbox('Mouvement')
-MoveBox:AddToggle('WSToggle', {
-    Text     = 'WalkSpeed',
-    Default  = false,
-    Callback = function(v)
-        Cfg.WS = v
-        if v then startWS(); Library:Notify('Speed ON - '..Cfg.WSVal..' studs', 2)
-        else stopWS(); Library:Notify('Speed OFF', 2) end
-    end
-})
-MoveBox:AddSlider('WSVal', {
-    Text = 'WalkSpeed', Default = 25, Min = 16, Max = 500, Rounding = 0,
-    Callback = function(v) Cfg.WSVal = v end
-})
-MoveBox:AddToggle('IJToggle', {
-    Text     = 'Infinite Jump',
-    Default  = false,
-    Callback = function(v)
-        Cfg.IJ = v
-        if v then startIJ(); Library:Notify('Infinite Jump ON', 2)
-        else stopIJ(); Library:Notify('Infinite Jump OFF', 2) end
-    end
-})
-MoveBox:AddToggle('NoclipToggle', {
-    Text     = 'Noclip',
-    Default  = false,
-    Callback = function(v)
-        Cfg.Noclip = v
-        Library:Notify(v and 'Noclip ON' or 'Noclip OFF', 2)
-    end
-})
-
--- SETTINGS TAB
-local MenuBox = Tabs.Settings:AddLeftGroupbox('Menu')
-MenuBox:AddButton({
-    Text = 'Discord LSX',
-    Func = function()
-        sc(function() setclipboard('https://discord.gg/94CnwG3ySJ') end)
-        Library:Notify('Lien Discord copie!', 3)
-    end
-})
-MenuBox:AddButton({
-    Text = 'Fermer le script',
-    Func = function()
-        stopAutoJob(); sc(function() stopFly() end)
-        sc(function() stopWS() end); sc(function() stopIJ() end)
-        local h = lp.Character and lp.Character:FindFirstChildWhichIsA("Humanoid")
-        if h then h.WalkSpeed = 16 end
-        Library:Unload()
-    end
-})
-
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-SaveManager:SetIgnoreIndexes({})
-SaveManager:SetFolder('LaysoxScripts/CarpetClean')
-ThemeManager:ApplyToTab(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
-
-Library:Notify('CarpetClean charge! Active Auto Job.', 4)
