@@ -14,12 +14,15 @@ local Camera = workspace.CurrentCamera
 
 local function sc(f,...) pcall(f,...) end
 
+-- VARIABLES UNIVERSEL
 local flySpeed = 100
 local flyActive = false
 local flyKeyName = "G"
 local noclip = false
+local noclippedParts = {}
 local wsActive = false
 local wsValue = 50
+local ijActive = false
 local ijConnection = nil
 local HumanModCons = {}
 
@@ -34,6 +37,7 @@ player.CharacterAdded:Connect(function()
     flyActive = false; noclip = false; wsActive = false
 end)
 
+-- FLY
 local function startFly()
     if flyActive then return end
     flyActive = true
@@ -79,6 +83,7 @@ local function stopFly()
     end
 end
 
+-- NOCLIP
 task.spawn(function()
     while task.wait(0.25) do
         if not noclip then continue end
@@ -89,6 +94,7 @@ task.spawn(function()
     end
 end)
 
+-- WALKSPEED
 local function startWS()
     local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
     if not h then return end
@@ -102,6 +108,7 @@ local function stopWS()
     if h then h.WalkSpeed = 16 end
 end
 
+-- INFINITE JUMP
 local function startIJ()
     if ijConnection then return end
     ijConnection = UserInputService.JumpRequest:Connect(function()
@@ -115,6 +122,7 @@ local function stopIJ()
     if ijConnection then ijConnection:Disconnect(); ijConnection = nil end
 end
 
+-- FLY KEY GLOBAL
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
@@ -123,7 +131,9 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
+-- ========================
 -- RAYFIELD
+-- ========================
 local Rayfield
 sc(function()
     Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
@@ -147,7 +157,9 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false,
 })
 
+-- ========================
 -- TAB UNIVERSEL
+-- ========================
 local UniTab = Window:CreateTab("Universel", 4483362458)
 
 UniTab:CreateSection("Fly")
@@ -156,7 +168,7 @@ UniTab:CreateSlider({
     Suffix = " studs/s", CurrentValue = 100, Flag = "UniFlySpeed",
     Callback = function(v) flySpeed = v end,
 })
-UniTab:CreateToggle({
+local FlyToggleUI = UniTab:CreateToggle({
     Name = "Activer Fly", CurrentValue = false, Flag = "UniFlyToggle",
     Callback = function(v)
         if v then startFly(); Rayfield:Notify({Title="Fly ON", Content=flySpeed.." studs/s", Duration=2})
@@ -229,102 +241,88 @@ UniTab:CreateButton({Name="Teleporter", Callback=function()
     end
 end})
 
+-- ========================
 -- TAB JEUX
+-- ========================
 local GamesTab = Window:CreateTab("Jeux", 4483362458)
-
-local currentPlaceId = game.PlaceId
 
 local games = {
     {
-        name        = "Carpet Cleaning Simulator",
-        placeId     = 124374448373637,
-        script      = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
-        description = "Auto job, XP farm, vitesse, tp...",
-        universal   = false,
+        name = "Carpet Cleaning Simulator",
+        placeId = 108065646525411,
+        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
+        description = "Auto job, XP farm, vitesse, tp..."
     },
-    {
-        name        = "Ban or Get Banned - Infinite Money",
-        placeId     = 96017656548489,
-        script      = "https://raw.githubusercontent.com/laysox/laysoxUI/main/infinite_money.lua",
-        description = "Infinite money farm automatique.",
-        universal   = false,
-    },
-    {
-        name        = "BloxStrike - Skin Changer",
-        placeId     = 114234929420007,
-        script      = "https://raw.githubusercontent.com/laysox/laysoxUI/main/bloxstrike_skin_changer.lua",
-        description = "Skin changer uniquement.",
-        universal   = false,
-    },
-    {
-        name        = "Free Emote",
-        placeId     = 0,
-        script      = "https://raw.githubusercontent.com/laysox/laysoxUI/main/free_emote.lua",
-        description = "Emotes gratuits, fonctionne dans tous les jeux.",
-        universal   = true,
-    },
-    {
-        name        = "Ninja Legends",
-        placeId     = 3956818381,
-        script      = "https://raw.githubusercontent.com/laysox/laysoxUI/main/ninja_legends.lua",
-        description = "Auto farm, boss, pets, teleports, ESP...",
-        universal   = false,
-    },
+    -- Ajoute tes futurs jeux ici :
+    -- {
+    --     name = "Nom du jeu",
+    --     placeId = 123456789,
+    --     script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/nomdujeu.lua",
+    --     description = "Description du script"
+    -- },
 }
 
 GamesTab:CreateParagraph({
     Title = "Laysox Launcher - Jeux",
-    Content = "Clique sur un jeu pour charger son script.\nTu dois etre dans le bon jeu.\n(Free Emote fonctionne partout)",
+    Content = "Clique sur un jeu pour charger son script.\nTu dois etre dans le bon jeu.",
 })
 
 GamesTab:CreateSection("Scripts disponibles")
 
-for _, g in pairs(games) do
-    local isCurrentGame = g.universal or (currentPlaceId == g.placeId)
-    local status = g.universal and " [UNIVERSEL]" or (isCurrentGame and " [OK]" or " [PAS CE JEU]")
+local currentPlaceId = game.PlaceId
+
+for _, gameInfo in pairs(games) do
+    local isCurrentGame = currentPlaceId == gameInfo.placeId
+    local status = isCurrentGame and " [OK]" or " [PAS CE JEU]"
 
     GamesTab:CreateButton({
-        Name = g.name .. status,
+        Name = gameInfo.name..status,
         Callback = function()
             if not isCurrentGame then
                 Rayfield:Notify({
                     Title = "Mauvais jeu!",
-                    Content = "Tu dois etre dans "..g.name.."\nTon Place ID : "..tostring(currentPlaceId).."\nPlace ID attendu : "..tostring(g.placeId),
-                    Duration = 6,
+                    Content = "Tu dois etre dans "..gameInfo.name.." pour ce script.\nPlace ID actuel : "..tostring(currentPlaceId),
+                    Duration = 5,
                 })
                 return
             end
-            Rayfield:Notify({Title="Chargement...", Content=g.name.." en cours...", Duration=3})
+            Rayfield:Notify({
+                Title = "Chargement...",
+                Content = "Script "..gameInfo.name.." en cours...",
+                Duration = 3,
+            })
             task.wait(1)
             Rayfield:Destroy()
             task.wait(0.5)
             sc(function()
-                loadstring(game:HttpGet(g.script))()
+                loadstring(game:HttpGet(gameInfo.script))()
             end)
         end,
     })
 
     GamesTab:CreateParagraph({
-        Title = g.name,
-        Content = g.description .. "\nPlace ID : " .. (g.universal and "Universel" or tostring(g.placeId)),
+        Title = gameInfo.name,
+        Content = gameInfo.description.."\nPlace ID : "..tostring(gameInfo.placeId),
     })
 end
 
 GamesTab:CreateSection("Jeu actuel")
 GamesTab:CreateParagraph({
-    Title = "Ton Place ID",
-    Content = tostring(currentPlaceId),
+    Title = "Place ID",
+    Content = "Tu es sur le jeu ID : "..tostring(currentPlaceId),
 })
 
+-- ========================
 -- TAB INFOS
+-- ========================
 local InfoTab = Window:CreateTab("Infos", 4483362458)
 InfoTab:CreateParagraph({
-    Title = "Comment utiliser",
-    Content = "1. Onglet Universel : fonctionne partout\n2. Onglet Jeux : charge un script pour un jeu\n3. Tu dois etre dans le bon jeu ([OK])\n4. Le script se charge et remplace le launcher",
+    Title = "Comment utiliser le Launcher",
+    Content = "1. L'onglet Universel fonctionne dans TOUS les jeux\n2. Va dans l'onglet Jeux pour charger un script specifique\n3. Clique sur le jeu dans lequel tu es ([OK])\n4. Le script se charge et remplace le launcher",
 })
 InfoTab:CreateParagraph({
     Title = "Scripts disponibles",
-    Content = "Carpet Cleaning Simulator\nBan or Get Banned - Infinite Money\nBloxStrike - Skin Changer\nFree Emote - Universel\nNinja Legends",
+    Content = "Carpet Cleaning Simulator - Auto job, XP farm...",
 })
 InfoTab:CreateParagraph({
     Title = "Universel - Fonctions",
@@ -333,7 +331,7 @@ InfoTab:CreateParagraph({
 InfoTab:CreateButton({
     Name = "Rejoindre le Discord LSX",
     Callback = function()
-        sc(function() setclipboard("https://discord.gg/tFkAe2RVKB") end)
+        sc(function() setclipboard("https://discord.gg/94CnwG3ySJ") end)
         Rayfield:Notify({Title="Discord", Content="Lien copie!", Duration=3})
     end,
 })
