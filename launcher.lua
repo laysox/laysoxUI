@@ -1,337 +1,251 @@
--- Laysox Launcher
-task.wait(2)
+-- Laysox Launcher | Linoria UI
+local repo         = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local Library      = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+local SaveManager  = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
 
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local UIS        = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 repeat task.wait(0.5) until player.Character
-local character = player.Character
+local character        = player.Character
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-local humanoid = character:WaitForChild("Humanoid")
-local Camera = workspace.CurrentCamera
+local Camera           = workspace.CurrentCamera
 
 local function sc(f,...) pcall(f,...) end
 
--- VARIABLES UNIVERSEL
-local flySpeed = 100
-local flyActive = false
+local flySpeed   = 100
+local flyActive  = false
 local flyKeyName = "G"
-local noclip = false
-local noclippedParts = {}
-local wsActive = false
-local wsValue = 50
-local ijActive = false
-local ijConnection = nil
-local HumanModCons = {}
+local noclip     = false
+local wsActive   = false
+local wsValue    = 50
+local ijConn     = nil
+local HMC        = {}
 
 local function refresh()
-    character = player.Character; if not character then return end
+    character        = player.Character; if not character then return end
     humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-    humanoid = character:WaitForChild("Humanoid")
 end
 
 player.CharacterAdded:Connect(function()
     task.wait(1); refresh()
-    flyActive = false; noclip = false; wsActive = false
+    flyActive=false; noclip=false; wsActive=false
 end)
 
--- FLY
 local function startFly()
-    if flyActive then return end
-    flyActive = true
-    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
+    if flyActive then return end; flyActive=true
+    local hrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then flyActive=false; return end
     sc(function()
-        if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
-        if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
+        if hrp:FindFirstChild("FG") then hrp.FG:Destroy() end
+        if hrp:FindFirstChild("FV") then hrp.FV:Destroy() end
     end)
-    local gyro = Instance.new("BodyGyro"); gyro.Name="FlyGyro"
-    gyro.MaxTorque = Vector3.new(1,1,1)*math.huge; gyro.P=100000
-    gyro.CFrame = hrp.CFrame; gyro.Parent = hrp
-    local vel = Instance.new("BodyVelocity"); vel.Name="FlyVelocity"
-    vel.MaxForce = Vector3.new(1,1,1)*math.huge; vel.P=10000
-    vel.Velocity = Vector3.zero; vel.Parent = hrp
+    local gyro=Instance.new("BodyGyro"); gyro.Name="FG"
+    gyro.MaxTorque=Vector3.new(1,1,1)*math.huge; gyro.P=100000
+    gyro.CFrame=hrp.CFrame; gyro.Parent=hrp
+    local vel=Instance.new("BodyVelocity"); vel.Name="FV"
+    vel.MaxForce=Vector3.new(1,1,1)*math.huge; vel.P=10000
+    vel.Velocity=Vector3.zero; vel.Parent=hrp
     local conn
-    conn = RunService.RenderStepped:Connect(function()
+    conn=RunService.RenderStepped:Connect(function()
         if not flyActive or not hrp or not hrp.Parent then
             if conn then conn:Disconnect() end
             sc(function() gyro:Destroy() end); sc(function() vel:Destroy() end)
             return
         end
-        local move = Vector3.zero; local cf = Camera.CFrame
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + cf.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - cf.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - cf.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + cf.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0,1,0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0,1,0) end
-        vel.Velocity = move.Magnitude > 0 and move.Unit * flySpeed or Vector3.zero
-        gyro.CFrame = Camera.CFrame
+        local mv=Vector3.zero; local cf=Camera.CFrame
+        if UIS:IsKeyDown(Enum.KeyCode.W) then mv=mv+cf.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then mv=mv-cf.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then mv=mv-cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then mv=mv+cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then mv=mv+Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then mv=mv-Vector3.new(0,1,0) end
+        vel.Velocity=mv.Magnitude>0 and mv.Unit*flySpeed or Vector3.zero
+        gyro.CFrame=Camera.CFrame
     end)
 end
 
 local function stopFly()
-    flyActive = false
-    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    flyActive=false
+    local hrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if hrp then
         sc(function()
-            if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
-            if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
+            if hrp:FindFirstChild("FG") then hrp.FG:Destroy() end
+            if hrp:FindFirstChild("FV") then hrp.FV:Destroy() end
         end)
     end
 end
 
--- NOCLIP
 task.spawn(function()
     while task.wait(0.25) do
         if not noclip then continue end
-        local char = player.Character; if not char then continue end
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+        local c=player.Character; if not c then continue end
+        for _,p in ipairs(c:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide=false end
         end
     end
 end)
 
--- WALKSPEED
 local function startWS()
-    local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
+    local h=player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
     if not h then return end
-    local function apply() h.WalkSpeed = wsValue end; apply()
-    if HumanModCons.ws then HumanModCons.ws:Disconnect() end
-    HumanModCons.ws = h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
+    local function apply() h.WalkSpeed=wsValue end; apply()
+    if HMC.ws then HMC.ws:Disconnect() end
+    HMC.ws=h:GetPropertyChangedSignal("WalkSpeed"):Connect(apply)
 end
 local function stopWS()
-    if HumanModCons.ws then HumanModCons.ws:Disconnect() end
-    local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
-    if h then h.WalkSpeed = 16 end
+    if HMC.ws then HMC.ws:Disconnect() end
+    local h=player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
+    if h then h.WalkSpeed=16 end
 end
 
--- INFINITE JUMP
 local function startIJ()
-    if ijConnection then return end
-    ijConnection = UserInputService.JumpRequest:Connect(function()
-        local char = player.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    if ijConn then return end
+    ijConn=UIS.JumpRequest:Connect(function()
+        local c=player.Character
+        if c then
+            local h=c:FindFirstChildWhichIsA("Humanoid")
+            if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
         end
     end)
 end
 local function stopIJ()
-    if ijConnection then ijConnection:Disconnect(); ijConnection = nil end
+    if ijConn then ijConn:Disconnect(); ijConn=nil end
 end
 
--- FLY KEY GLOBAL
-UserInputService.InputBegan:Connect(function(input, gp)
+UIS.InputBegan:Connect(function(input,gp)
     if gp then return end
-    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-    if input.KeyCode.Name == flyKeyName then
+    if input.UserInputType~=Enum.UserInputType.Keyboard then return end
+    if input.KeyCode.Name==flyKeyName then
         if flyActive then stopFly() else startFly() end
     end
 end)
 
--- ========================
--- RAYFIELD
--- ========================
-local Rayfield
-sc(function()
-    Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-end)
-if not Rayfield then
-    task.wait(2)
-    sc(function()
-        Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-    end)
-end
-if not Rayfield then return end
-
-local Window = Rayfield:CreateWindow({
-    Name = "Laysox Launcher",
-    LoadingTitle = "Laysox Launcher",
-    LoadingSubtitle = "Chargement...",
-    Theme = "Default",
-    DisableRayfieldPrompts = true,
-    DisableBuildWarnings = true,
-    ConfigurationSaving = {Enabled = false},
-    KeySystem = false,
+-- WINDOW
+local Window=Library:CreateWindow({
+    Title='Laysox Launcher',
+    Center=true,
+    AutoShow=true,
+    TabPadding=8,
+    MenuFadeTime=0.2,
 })
 
--- ========================
+local Tabs={
+    Universel = Window:AddTab('Universel'),
+    Jeux      = Window:AddTab('Jeux'),
+    Settings  = Window:AddTab('Settings'),
+}
+
 -- TAB UNIVERSEL
--- ========================
-local UniTab = Window:CreateTab("Universel", 4483362458)
+local ULeft  = Tabs.Universel:AddLeftGroupbox('Fly')
+local URight = Tabs.Universel:AddRightGroupbox('Mouvement')
 
-UniTab:CreateSection("Fly")
-UniTab:CreateSlider({
-    Name = "Vitesse Fly", Range = {10,2000}, Increment = 10,
-    Suffix = " studs/s", CurrentValue = 100, Flag = "UniFlySpeed",
-    Callback = function(v) flySpeed = v end,
+ULeft:AddSlider('UniFlySPD',{Text='Vitesse Fly',Default=100,Min=10,Max=2000,Rounding=0,Callback=function(v) flySpeed=v end})
+ULeft:AddToggle('UniFlyTog',{Text='Activer Fly',Default=false,Callback=function(v) if v then startFly() else stopFly() end end})
+ULeft:AddDropdown('UniFlyKey',{
+    Text='Touche Fly',
+    Values={'G','Q','E','R','T','F','H','J','K','L','Z','X','C','V','B','N','M','F1','F2','F3','F4','F5','F6','LeftShift','LeftAlt','Tab'},
+    Default=1,
+    Callback=function(v) flyKeyName=v end,
 })
-local FlyToggleUI = UniTab:CreateToggle({
-    Name = "Activer Fly", CurrentValue = false, Flag = "UniFlyToggle",
-    Callback = function(v)
-        if v then startFly(); Rayfield:Notify({Title="Fly ON", Content=flySpeed.." studs/s", Duration=2})
-        else stopFly(); Rayfield:Notify({Title="Fly OFF", Content="Retour au sol.", Duration=2}) end
-    end,
-})
-UniTab:CreateDropdown({
-    Name = "Touche Fly", Options = {
-        "G","Q","E","R","T","F","H","J","K","L","Z","X","C","V","B","N","M",
-        "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
-        "LeftAlt","RightAlt","LeftShift","RightShift","Tab"
-    },
-    CurrentOption = {"G"}, Flag = "UniFlyKey", MultipleOptions = false,
-    Callback = function(o)
-        flyKeyName = o[1]
-        Rayfield:Notify({Title="Touche Fly", Content="Fly touche -> "..o[1], Duration=2})
-    end,
-})
-UniTab:CreateParagraph({
-    Title = "Controles Fly",
-    Content = "W/A/S/D -> Directions\nSpace -> Monter\nCtrl -> Descendre\nTouche configuree -> Toggle",
-})
+ULeft:AddLabel('W/A/S/D | Space monter | Ctrl descendre')
 
-UniTab:CreateSection("Noclip")
-UniTab:CreateToggle({
-    Name = "Noclip (traverser les murs)", CurrentValue = false, Flag = "UniNoclip",
-    Callback = function(v)
-        noclip = v
-        Rayfield:Notify({Title=v and "Noclip ON" or "Noclip OFF",
-            Content=v and "Tu traverses les murs." or "Collisions restaurees.", Duration=2})
-    end,
-})
+URight:AddToggle('UniNoclip',{Text='Noclip',Default=false,Callback=function(v) noclip=v end})
+URight:AddDivider()
+URight:AddSlider('UniWSVal',{Text='WalkSpeed',Default=50,Min=16,Max=500,Rounding=0,Callback=function(v) wsValue=v; if wsActive then startWS() end end})
+URight:AddToggle('UniWSTog',{Text='Activer WalkSpeed',Default=false,Callback=function(v) wsActive=v; if v then startWS() else stopWS() end end})
+URight:AddDivider()
+URight:AddToggle('UniIJ',{Text='Infinite Jump',Default=false,Callback=function(v) if v then startIJ() else stopIJ() end end})
 
-UniTab:CreateSection("Vitesse")
-UniTab:CreateSlider({
-    Name = "WalkSpeed", Range = {16,500}, Increment = 1,
-    Suffix = " studs", CurrentValue = 50, Flag = "UniWalkSpeed",
-    Callback = function(v) wsValue = v; if wsActive then startWS() end end,
-})
-UniTab:CreateToggle({
-    Name = "Activer WalkSpeed", CurrentValue = false, Flag = "UniWSToggle",
-    Callback = function(v)
-        wsActive = v
-        if v then startWS(); Rayfield:Notify({Title="Speed ON", Content=wsValue.." studs", Duration=2})
-        else stopWS(); Rayfield:Notify({Title="Speed OFF", Content="Vitesse normale.", Duration=2}) end
-    end,
-})
-
-UniTab:CreateSection("Saut")
-UniTab:CreateToggle({
-    Name = "Infinite Jump", CurrentValue = false, Flag = "UniIJ",
-    Callback = function(v)
-        if v then startIJ(); Rayfield:Notify({Title="Infinite Jump ON", Content="Saute sans limite!", Duration=2})
-        else stopIJ(); Rayfield:Notify({Title="Infinite Jump OFF", Content="Saut normal.", Duration=2}) end
-    end,
-})
-
-UniTab:CreateSection("Teleport rapide")
-local qx, qy, qz = 0, 0, 0
-UniTab:CreateInput({Name="X", PlaceholderText="100", RemoveTextAfterFocusLost=false, Flag="UniX",
-    Callback=function(v) qx=tonumber(v) or qx end})
-UniTab:CreateInput({Name="Y", PlaceholderText="50", RemoveTextAfterFocusLost=false, Flag="UniY",
-    Callback=function(v) qy=tonumber(v) or qy end})
-UniTab:CreateInput({Name="Z", PlaceholderText="200", RemoveTextAfterFocusLost=false, Flag="UniZ",
-    Callback=function(v) qz=tonumber(v) or qz end})
-UniTab:CreateButton({Name="Teleporter", Callback=function()
+local UniTPBox=Tabs.Universel:AddLeftGroupbox('Teleport rapide')
+local tpX,tpY,tpZ=0,0,0
+UniTPBox:AddInput('UniTPX',{Default='0',Text='X',Callback=function(v) tpX=tonumber(v) or tpX end})
+UniTPBox:AddInput('UniTPY',{Default='0',Text='Y',Callback=function(v) tpY=tonumber(v) or tpY end})
+UniTPBox:AddInput('UniTPZ',{Default='0',Text='Z',Callback=function(v) tpZ=tonumber(v) or tpZ end})
+UniTPBox:AddButton({Text='Teleporter',Func=function()
     if humanoidRootPart then
-        humanoidRootPart.CFrame = CFrame.new(qx, qy, qz)
-        Rayfield:Notify({Title="TP!", Content=("X:%d Y:%d Z:%d"):format(qx,qy,qz), Duration=2})
+        humanoidRootPart.CFrame=CFrame.new(tpX,tpY,tpZ)
+        Library:Notify(('TP X:%d Y:%d Z:%d'):format(tpX,tpY,tpZ),2)
     end
 end})
 
--- ========================
 -- TAB JEUX
--- ========================
-local GamesTab = Window:CreateTab("Jeux", 4483362458)
+local currentPlaceId=game.PlaceId
 
-local games = {
-    {
-        name = "Carpet Cleaning Simulator",
-        placeId = 108065646525411,
-        script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua",
-        description = "Auto job, XP farm, vitesse, tp..."
-    },
-    -- Ajoute tes futurs jeux ici :
-    -- {
-    --     name = "Nom du jeu",
-    --     placeId = 123456789,
-    --     script = "https://raw.githubusercontent.com/laysox/laysoxUI/main/nomdujeu.lua",
-    --     description = "Description du script"
-    -- },
+local allScripts={
+    {name='Carpet Cleaning Simulator', placeId=124374448373637, script='https://raw.githubusercontent.com/laysox/laysoxUI/main/CarpetClean.lua'},
+    {name='Build A Boat For Treasure', placeId=537413528,       script='https://raw.githubusercontent.com/laysox/laysoxUI/main/BuildABoat.lua'},
+    {name='Blox Strike',               placeId=0,               script=''},
+    {name='Ban or Get Banned',         placeId=0,               script=''},
 }
 
-GamesTab:CreateParagraph({
-    Title = "Laysox Launcher - Jeux",
-    Content = "Clique sur un jeu pour charger son script.\nTu dois etre dans le bon jeu.",
-})
-
-GamesTab:CreateSection("Scripts disponibles")
-
-local currentPlaceId = game.PlaceId
-
-for _, gameInfo in pairs(games) do
-    local isCurrentGame = currentPlaceId == gameInfo.placeId
-    local status = isCurrentGame and " [OK]" or " [PAS CE JEU]"
-
-    GamesTab:CreateButton({
-        Name = gameInfo.name..status,
-        Callback = function()
-            if not isCurrentGame then
-                Rayfield:Notify({
-                    Title = "Mauvais jeu!",
-                    Content = "Tu dois etre dans "..gameInfo.name.." pour ce script.\nPlace ID actuel : "..tostring(currentPlaceId),
-                    Duration = 5,
-                })
-                return
-            end
-            Rayfield:Notify({
-                Title = "Chargement...",
-                Content = "Script "..gameInfo.name.." en cours...",
-                Duration = 3,
-            })
-            task.wait(1)
-            Rayfield:Destroy()
-            task.wait(0.5)
-            sc(function()
-                loadstring(game:HttpGet(gameInfo.script))()
-            end)
-        end,
-    })
-
-    GamesTab:CreateParagraph({
-        Title = gameInfo.name,
-        Content = gameInfo.description.."\nPlace ID : "..tostring(gameInfo.placeId),
-    })
+local scriptsDispos={}
+local scriptsNonDispo={}
+for _,g in ipairs(allScripts) do
+    if g.placeId==currentPlaceId and g.script~='' then
+        table.insert(scriptsDispos,g)
+    else
+        table.insert(scriptsNonDispo,g)
+    end
 end
 
-GamesTab:CreateSection("Jeu actuel")
-GamesTab:CreateParagraph({
-    Title = "Place ID",
-    Content = "Tu es sur le jeu ID : "..tostring(currentPlaceId),
+local JLeft  = Tabs.Jeux:AddLeftGroupbox('Scripts disponibles')
+local JRight = Tabs.Jeux:AddRightGroupbox('Scripts non disponibles')
+
+if #scriptsDispos==0 then
+    JLeft:AddLabel('Aucun script disponible sur ce jeu.')
+    JLeft:AddLabel('Fais une demande sur le Discord !')
+    JLeft:AddButton({Text='Discord LSX',Func=function()
+        sc(function() setclipboard('https://discord.gg/94CnwG3ySJ') end)
+        Library:Notify('Lien copie !',2)
+    end})
+else
+    for _,g in ipairs(scriptsDispos) do
+        JLeft:AddButton({
+            Text=g.name,
+            Func=function()
+                Library:Notify('Chargement '..g.name..'...',3)
+                task.wait(0.5)
+                Library.Unloaded=true
+                task.wait(0.3)
+                sc(function() loadstring(game:HttpGet(g.script))() end)
+            end,
+        })
+    end
+end
+
+for _,g in ipairs(scriptsNonDispo) do
+    JRight:AddLabel(g.name)
+end
+JRight:AddDivider()
+JRight:AddLabel('Place ID actuel : '..tostring(currentPlaceId))
+
+-- TAB SETTINGS
+local SLeft  = Tabs.Settings:AddLeftGroupbox('Menu')
+local SRight = Tabs.Settings:AddRightGroupbox('Liens')
+
+SLeft:AddKeybind('MenuKeybind',{
+    Text='Toggle Menu',
+    Default='LeftShift',
+    NoUI=true,
+    Callback=function() Library:ToggleWindowVisibility() end,
 })
 
--- ========================
--- TAB INFOS
--- ========================
-local InfoTab = Window:CreateTab("Infos", 4483362458)
-InfoTab:CreateParagraph({
-    Title = "Comment utiliser le Launcher",
-    Content = "1. L'onglet Universel fonctionne dans TOUS les jeux\n2. Va dans l'onglet Jeux pour charger un script specifique\n3. Clique sur le jeu dans lequel tu es ([OK])\n4. Le script se charge et remplace le launcher",
-})
-InfoTab:CreateParagraph({
-    Title = "Scripts disponibles",
-    Content = "Carpet Cleaning Simulator - Auto job, XP farm...",
-})
-InfoTab:CreateParagraph({
-    Title = "Universel - Fonctions",
-    Content = "Fly (touche configurable)\nNoclip\nWalkSpeed\nInfinite Jump\nTeleport rapide",
-})
-InfoTab:CreateButton({
-    Name = "Rejoindre le Discord LSX",
-    Callback = function()
-        sc(function() setclipboard("https://discord.gg/94CnwG3ySJ") end)
-        Rayfield:Notify({Title="Discord", Content="Lien copie!", Duration=3})
-    end,
-})
+SRight:AddButton({Text='Discord LSX',Func=function()
+    sc(function() setclipboard('https://discord.gg/94CnwG3ySJ') end)
+    Library:Notify('Lien Discord copie !',3)
+end})
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({'MenuKeybind'})
+ThemeManager:SetFolder('LaysoxLauncher')
+SaveManager:SetFolder('LaysoxLauncher/configs')
+SaveManager:BuildConfigSection(Tabs['Settings'])
+ThemeManager:ApplyToTab(Tabs['Settings'])
+
+Library:Notify('Laysox Launcher charge !',3)
